@@ -37,7 +37,10 @@ LOG = logging.getLogger(__name__)
 
 # By default, this specifies the directory where the
 # configuration files locate.
-ETCDIR = '/etc/neutron'
+#ETCDIR = '/etc/dragonflow'
+# TODO: Change back to /etc/
+# temp path for developing
+ETCDIR = '/home/vagrant/dragonflow/etc/'
 
 
 def etcdir(*p):
@@ -49,6 +52,7 @@ def config_parse(conf=None, args=None, **kwargs):
         args = []
     args += ['--config-file', etcdir('neutron.conf')]
     args += ['--config-file', etcdir('dragonflow.ini')]
+    print "{}".format(etcdir('dragonflow.ini'))
     if conf is None:
         release = version.version_info.release_string()
         cfg.CONF(args=args, project='dragonflow',

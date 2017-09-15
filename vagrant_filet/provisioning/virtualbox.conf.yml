@@ -2,8 +2,9 @@
 box: "ubuntu/trusty64"
 controller1:
     host_name: controller1
-    ip: "2017:db8::f201"
-    netmask: "120"
+    ip: "192.168.33.101"
+    # ip: "2017:db8::f201"
+    # netmask: "120"
     memory: 6144
     cpus: 2
 router:

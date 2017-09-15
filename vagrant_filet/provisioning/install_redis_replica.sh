@@ -1,9 +1,11 @@
 #!/bin/sh
 MASTER_NAME="redis-master"
 SLAVE_NAME="redis-slave"
-IMAGE='bitnami/redis:latest'
+IMAGE='redis:latest'
 PASSWORD='asdf'
 DETACHED='true'
+PERSIST_PATH='/home/vagrant/dragonflow/vagrant_filet/provisioning/redis/redis.conf:/usr/local/etc/redis/redis.conf'
+CONFIG_PATH='/usr/local/etc/redis/redis.conf'
 
 # install docker if not installed
 install_docker(){
@@ -39,18 +41,23 @@ docker rm $SLAVE_NAME
 
 echo "Creating Cluster"
 # start cluster master
-docker run --name $MASTER_NAME\
-    -e REDIS_REPLICATION_MODE=master \
-    -e REDIS_PASSWORD=$PASSWORD \
+#-e REDIS_PASSWORD=$PASSWORD \
+    #-e REDIS_REPLICATION_MODE=master \
+    docker run --name $MASTER_NAME\
+    -e ALLOW_EMPTY_PASSWORD=yes \
+    -v $PERSIST_PATH \
     -d=$DETACHED \
-    $IMAGE 
+    -p 6379:6379 \
+    $IMAGE \
+   redis-server $CONFIG_PATH
 # start cluster slave
-docker run --name $SLAVE_NAME \
-    --link redis-master:master \
-    -e REDIS_REPLICATION_MODE=slave \
-    -e REDIS_MASTER_HOST=master \
-    -e REDIS_MASTER_PORT_NUMBER=6379 \
-    -e REDIS_MASTER_PASSWORD=$PASSWORD \
-    -e REDIS_PASSWORD=$PASSWORD \
-    -d=$DETACHED \
-    $IMAGE
+#-e REDIS_MASTER_PASSWORD=$PASSWORD \
+    #-e REDIS_PASSWORD=$PASSWORD \
+    #docker run --name $SLAVE_NAME \
+    #--link redis-master:master \
+    #-e REDIS_REPLICATION_MODE=slave \
+    #-e REDIS_MASTER_HOST=master \
+    #-e REDIS_MASTER_PORT_NUMBER=6379 \
+    #-e ALLOW_EMPTY_PASSWORD=yes \
+    #-d=$DETACHED \
+    #$IMAGE

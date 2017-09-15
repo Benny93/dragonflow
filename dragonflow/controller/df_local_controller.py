@@ -15,7 +15,7 @@
 
 import sys
 
-from neutron.common import config as common_config
+from dragonflow.neutron.common import config as common_config
 from oslo_log import log
 from oslo_service import loopingcall
 from ryu.app.ofctl import service as of_service
@@ -39,12 +39,10 @@ from dragonflow.db.models import ovs
 from dragonflow.db import sync
 from dragonflow.ovsdb import vswitch_impl
 
-
 LOG = log.getLogger(__name__)
 
 
 class DfLocalController(object):
-
     def __init__(self, chassis_name, nb_api):
         self.db_store = db_store.get_instance()
 
@@ -58,8 +56,8 @@ class DfLocalController(object):
         self.neutron_notifier = None
         if cfg.CONF.df.enable_neutron_notifier:
             self.neutron_notifier = df_utils.load_driver(
-                     cfg.CONF.df.neutron_notifier,
-                     df_utils.DF_NEUTRON_NOTIFIER_DRIVER_NAMESPACE)
+                cfg.CONF.df.neutron_notifier,
+                df_utils.DF_NEUTRON_NOTIFIER_DRIVER_NAMESPACE)
 
         app_mgr = app_manager.AppManager.get_instance()
         self.open_flow_app = app_mgr.instantiate(
@@ -83,10 +81,10 @@ class DfLocalController(object):
             self._submit_sync_event)
 
         self.sync_rate_limiter = df_utils.RateLimiter(
-                max_rate=1, time_unit=db_common.DB_SYNC_MINIMUM_INTERVAL)
+            max_rate=1, time_unit=db_common.DB_SYNC_MINIMUM_INTERVAL)
 
     def run(self):
-        self.vswitch_api.initialize(self.nb_api)
+        # self.vswitch_api.initialize(self.nb_api)
         self.nb_api.register_notification_callback(self._handle_update)
         if cfg.CONF.df.enable_neutron_notifier:
             self.neutron_notifier.initialize(nb_api=self.nb_api,
@@ -104,15 +102,16 @@ class DfLocalController(object):
         # if no, set controller
         targets = ('tcp:' + cfg.CONF.df_ryu.of_listen_address + ':' +
                    str(cfg.CONF.df_ryu.of_listen_port))
-        is_controller_set = self.vswitch_api.check_controller(targets)
+        # is_controller_set = self.vswitch_api.check_controller(targets)
         integration_bridge = cfg.CONF.df.integration_bridge
-        if not is_controller_set:
-            self.vswitch_api.set_controller(integration_bridge, [targets])
-        is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
-            'secure')
-        if not is_fail_mode_set:
-            self.vswitch_api.set_controller_fail_mode(
-                integration_bridge, 'secure')
+        # if not is_controller_set:
+        #    self.vswitch_api.set_controller(integration_bridge, [targets])
+        # is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
+        #    'secure')
+        # if not is_fail_mode_set:
+        #    self.vswitch_api.set_controller_fail_mode(
+        #       integration_bridge, 'secure')
+
         self.open_flow_service.start()
         self.open_flow_app.start()
         self._register_models()

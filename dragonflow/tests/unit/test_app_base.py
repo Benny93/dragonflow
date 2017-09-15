@@ -14,10 +14,10 @@
 #    under the License.
 
 import mock
-from neutron_lib import constants as n_const
 from oslo_config import cfg
 
 from dragonflow.common import constants
+from dragonflow.controller.common import constants as ctl_const
 from dragonflow.controller import df_local_controller
 from dragonflow.controller import ryu_base_app
 from dragonflow.controller import topology
@@ -310,11 +310,11 @@ fake_security_group = secgroups.SecurityGroup(
     rules=[secgroups.SecurityGroupRule(
             direction="egress",
             security_group_id="fake_security_group_id1",
-            ethertype=n_const.IPv4,
+            ethertype=ctl_const.IPv4,
             topic="fake_tenant1",
             port_range_max=53,
             port_range_min=53,
-            protocol=n_const.PROTO_NUM_UDP,
+            protocol=ctl_const.PROTO_NUM_UDP,
             remote_group_id=None,
             remote_ip_prefix="192.168.180.0/28",
             id="fake_security_group_rule_1"),
@@ -332,18 +332,18 @@ fake_security_group = secgroups.SecurityGroup(
            secgroups.SecurityGroupRule(
             direction="egress",
             security_group_id="fake_security_group_id1",
-            ethertype=n_const.IPv6,
+            ethertype=ctl_const.IPv6,
             topic="fake_tenant1",
             port_range_max=53,
             port_range_min=53,
-            protocol=n_const.PROTO_NUM_UDP,
+            protocol=ctl_const.PROTO_NUM_UDP,
             remote_group_id=None,
             remote_ip_prefix="1111::/64",
             id="fake_security_group_rule_3"),
            secgroups.SecurityGroupRule(
             direction="ingress",
             security_group_id="fake_security_group_id1",
-            ethertype=n_const.IPv6,
+            ethertype=ctl_const.IPv6,
             topic="fake_tenant1",
             port_range_max=None,
             port_range_min=None,

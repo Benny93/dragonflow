@@ -1,3 +1,5 @@
+#    Copyright 2011 OpenStack Foundation
+#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -10,6 +12,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# from neutron.common import eventlet_utils
+import pbr.version
 
-# eventlet_utils.monkey_patch()
+version_info = pbr.version.VersionInfo('neutron')

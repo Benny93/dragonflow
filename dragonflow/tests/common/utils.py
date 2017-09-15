@@ -16,7 +16,7 @@ import re
 import mock
 import netaddr
 from neutron.agent.common import utils as agent_utils
-from neutron.common import utils as n_utils
+# from neutron.common import utils as n_utils
 from neutron_lib import constants as n_const
 import six
 
