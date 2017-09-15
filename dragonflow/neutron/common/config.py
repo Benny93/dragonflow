@@ -19,7 +19,7 @@ Routines for configuring Neutron
 
 import sys
 
-from keystoneauth1 import loading as ks_loading
+# from keystoneauth1 import loading as ks_loading
 from neutron_lib.api import validators
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -30,7 +30,6 @@ from dragonflow.neutron._i18n import _
 from dragonflow.neutron.conf import common as common_config
 from dragonflow.neutron import policy
 from dragonflow.neutron import version
-
 
 LOG = logging.getLogger(__name__)
 
@@ -50,20 +49,19 @@ common_config.register_core_common_config_opts()
 # Ensure that the control exchange is set correctly
 oslo_messaging.set_transport_defaults(control_exchange='neutron')
 
-
 NOVA_CONF_SECTION = 'nova'
 
-ks_loading.register_auth_conf_options(cfg.CONF, NOVA_CONF_SECTION)
-ks_loading.register_session_conf_options(cfg.CONF, NOVA_CONF_SECTION)
+# ks_loading.register_auth_conf_options(cfg.CONF, NOVA_CONF_SECTION)
+# ks_loading.register_session_conf_options(cfg.CONF, NOVA_CONF_SECTION)
 
 
 # Register the nova configuration options
 common_config.register_nova_opts()
 
-ks_loading.register_auth_conf_options(cfg.CONF,
-                                      common_config.PLACEMENT_CONF_SECTION)
-ks_loading.register_session_conf_options(cfg.CONF,
-                                         common_config.PLACEMENT_CONF_SECTION)
+# ks_loading.register_auth_conf_options(cfg.CONF,
+#                                    common_config.PLACEMENT_CONF_SECTION)
+# ks_loading.register_session_conf_options(cfg.CONF,
+#                                        common_config.PLACEMENT_CONF_SECTION)
 
 # Register the placement configuration options
 common_config.register_placement_opts()
@@ -94,7 +92,7 @@ def setup_logging():
     # We use the oslo.log default log levels and add only the extra levels
     # that Neutron needs.
     logging.set_defaults(default_log_levels=logging.get_default_log_levels() +
-                         EXTRA_LOG_LEVEL_DEFAULTS)
+                                            EXTRA_LOG_LEVEL_DEFAULTS)
     logging.setup(cfg.CONF, product_name)
     LOG.info("Logging enabled!")
     LOG.info("%(prog)s version %(version)s",

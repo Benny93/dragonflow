@@ -18,7 +18,7 @@ from mininet.util import quietRun
 import pingparser
 
 
-CTLR_IP = '2017:db8::ffaa'
+CTLR_IP = '127.0.0.1'
 CTLR_PRT = '6653'
 
 # 0: Step wise testing, 1: Continues Testing
@@ -61,7 +61,7 @@ def scratchNet(cname='controller', cargs='-v ptcp:'):
 
     # Note: controller and switch are in root namespace, and we
     # can connect via loopback interface
-    s_cmd = 'ovs-vsctl set-controller dp0 tcp:[{}]:{}'.format(CTLR_IP, CTLR_PRT)
+    s_cmd = 'ovs-vsctl set-controller dp0 tcp:{}:{}'.format(CTLR_IP, CTLR_PRT)
     print s_cmd
     switch.cmd(s_cmd)
     ping_results = ['received,host,jitter,packet_loss,avgping,minping,time,sent,maxping\n']

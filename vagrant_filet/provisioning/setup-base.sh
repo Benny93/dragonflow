@@ -20,7 +20,7 @@ fi
 #echo "net.ipv6.conf.all.accept_ra=0" >> /etc/sysctl.conf
 #echo "net.ipv6.conf.all.autoconf=0" >> /etc/sysctl.conf
 
-pip install --user --upgrade pip
+sudo pip install --upgrade pip
 #usage
 #git clone git://github.com/robbyrussell/oh-my-zsh.git /home/vagrant/.oh-my-zsh
 #apt-get -y install zsh
