@@ -4,7 +4,7 @@ SLAVE_NAME="redis-slave"
 IMAGE='redis:latest'
 PASSWORD='asdf'
 DETACHED='true'
-PERSIST_PATH='/home/vagrant/dragonflow/vagrant_filet/provisioning/redis/redis.conf:/usr/local/etc/redis/redis.conf'
+PERSIST_PATH='/home/vagrant/dragonflow/vagrant/provisioning/redis/redis.conf:/usr/local/etc/redis/redis.conf'
 CONFIG_PATH='/usr/local/etc/redis/redis.conf'
 
 # install docker if not installed

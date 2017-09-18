@@ -22,6 +22,7 @@ from ryu.app.ofctl import service as of_service
 from ryu.base import app_manager
 from ryu import cfg as ryu_cfg
 
+
 from dragonflow.common import utils as df_utils
 from dragonflow import conf as cfg
 from dragonflow.controller.common import constants as ctrl_const
@@ -45,7 +46,6 @@ LOG = log.getLogger(__name__)
 class DfLocalController(object):
     def __init__(self, chassis_name, nb_api):
         self.db_store = db_store.get_instance()
-
         self.chassis_name = chassis_name
         self.nb_api = nb_api
         self.ip = cfg.CONF.df.local_ip
@@ -66,6 +66,7 @@ class DfLocalController(object):
             vswitch_api=self.vswitch_api,
             neutron_server_notifier=self.neutron_notifier,
         )
+
         # The OfctlService is needed to support the 'get_flows' method
         self.open_flow_service = app_mgr.instantiate(of_service.OfctlService)
         self.topology = None
@@ -84,7 +85,7 @@ class DfLocalController(object):
             max_rate=1, time_unit=db_common.DB_SYNC_MINIMUM_INTERVAL)
 
     def run(self):
-        # self.vswitch_api.initialize(self.nb_api)
+        self.vswitch_api.initialize(self.nb_api)
         self.nb_api.register_notification_callback(self._handle_update)
         if cfg.CONF.df.enable_neutron_notifier:
             self.neutron_notifier.initialize(nb_api=self.nb_api,
@@ -102,15 +103,15 @@ class DfLocalController(object):
         # if no, set controller
         targets = ('tcp:' + cfg.CONF.df_ryu.of_listen_address + ':' +
                    str(cfg.CONF.df_ryu.of_listen_port))
-        # is_controller_set = self.vswitch_api.check_controller(targets)
+        is_controller_set = self.vswitch_api.check_controller(targets)
         integration_bridge = cfg.CONF.df.integration_bridge
-        # if not is_controller_set:
-        #    self.vswitch_api.set_controller(integration_bridge, [targets])
-        # is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
-        #    'secure')
-        # if not is_fail_mode_set:
-        #    self.vswitch_api.set_controller_fail_mode(
-        #       integration_bridge, 'secure')
+        if not is_controller_set:
+           self.vswitch_api.set_controller(integration_bridge, [targets])
+        is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
+           'secure')
+        if not is_fail_mode_set:
+           self.vswitch_api.set_controller_fail_mode(
+              integration_bridge, 'secure')
 
         self.open_flow_service.start()
         self.open_flow_app.start()
@@ -332,6 +333,7 @@ def init_ryu_config():
     ryu_cfg.CONF(project='ryu', args=[])
     ryu_cfg.CONF.ofp_listen_host = cfg.CONF.df_ryu.of_listen_address
     ryu_cfg.CONF.ofp_tcp_listen_port = cfg.CONF.df_ryu.of_listen_port
+
 
 
 # Run this application like this:

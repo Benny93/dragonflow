@@ -10,9 +10,9 @@ from ryu.cmd import manager
 # sys.argv.append('ws_topology.py')
 sys.argv.append('simple_switch_13.py')
 sys.argv.append('--verbose')
-sys.argv.append('--observe-links')
+#sys.argv.append('--observe-links')
 # ipv6 listen host
 #sys.argv.append('--ofp-listen-host')
 #sys.argv.append('::')
-sys.argv.append('--enable-debugger')
+#sys.argv.append('--enable-debugger')
 manager.main()

@@ -1,17 +1,29 @@
 ---
 box: "ubuntu/trusty64"
-devstack_controller:
-  host_name: controller.devstack.dev
-  ip: "192.168.33.101"
-  memory: 8192
-  cpus: 2
-devstack_compute1:
-  host_name: compute1.devstack.dev
-  ip: "192.168.33.102"
-  memory: 1024
-  cpus: 1
-devstack_compute2:
-  host_name: compute2.devstack.dev
-  ip: "192.168.33.103"
-  memory: 1024
-  cpus: 1
+controller1:
+    host_name: controller1
+    ip: "192.168.33.101"
+    # ip: "2017:db8::f201"
+    # netmask: "120"
+    memory: 6144
+    cpus: 2
+router:
+    host_name: router
+    ip1: "2017:db8::f1ff"
+    ip2: "2017:db8::f2ff"
+    ip3: "2017:db8::f3ff"
+    netmask: "120"
+    memory: 512
+    cpus: 1
+switch1:
+    host_name: switch1
+    ip: "2017:db8::f101"
+    netmask: "120"
+    memory: 512
+    cpus: 1
+switch2:
+    host_name: switch2
+    ip: "2017:db8::f102"
+    netmask: "120"
+    memory: 512
+    cpus: 1

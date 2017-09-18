@@ -40,6 +40,7 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
                  neutron_server_notifier=None):
         super(RyuDFAdapter, self).__init__()
         self.dispatcher = dispatcher.AppDispatcher(cfg.CONF.df.apps_list)
+        # TODO: Remove vswitch api for standalone version
         self.vswitch_api = vswitch_api
         self.nb_api = nb_api
         self.neutron_server_notifier = neutron_server_notifier
