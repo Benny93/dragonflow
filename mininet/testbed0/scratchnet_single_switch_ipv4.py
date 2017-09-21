@@ -30,6 +30,7 @@ def stop_net(controller, cname, switch):
     info("*** Stopping network\n")
     controller.cmd('kill %' + cname)
     switch.cmd('ovs-vsctl del-br br-int')
+    #switch.cmd('ovs-vsctl del-br br-ex')
     switch.deleteIntfs()
     info('Net was removed\n')
 
@@ -56,14 +57,29 @@ def scratchNet(cname='controller', cargs='-v ptcp:'):
     info("*** Starting network using Open vSwitch\n")
     controller.cmd(cname + ' ' + cargs + '&')
 
+    #issue_switch_cmd(switch, 'ovs-vsctl del-br br-ex')
     issue_switch_cmd(switch, 'ovs-vsctl del-br br-int')
+    #issue_switch_cmd(switch, 'ovs-vsctl add-br br-ex')
     issue_switch_cmd(switch, 'ovs-vsctl add-br br-int')
+
+    # CONCLUSION
+    # ovs-vsctl add-br br-ex
+    # ovs-vsctl add-port br-ex {external_nic}
+    # ovs-vsctl add-br br-int
+    # ovs-vsctl add-port br-int {internal_nic}
+    # ovs-vsctl --no-wait set bridge br-int fail-mode=secure other-config:disable-in-band=true
+    # ovs-vsctl set bridge br-int protocols=OpenFlow10,OpenFlow13
+    # ovs-vsctl set-manager ptcp:6640:0.0.0.0
+
     for intf in switch.intfs.values():
         print issue_switch_cmd(switch, 'ovs-vsctl add-port br-int %s' % intf)
 
-    issue_switch_cmd(switch, 'ovs-vsctl set bridge br-int fail-mode=secure other-config:disable-in-band=true')
+    # for intf in switch.intfs.values():
+    #    print issue_switch_cmd(switch, 'ovs-vsctl add-port br-ex %s' % intf)
+
+    issue_switch_cmd(switch, 'ovs-vsctl --no-wait set bridge br-int fail-mode=secure other-config:disable-in-band=true')
     issue_switch_cmd(switch, 'ovs-vsctl set bridge br-int protocols=OpenFlow10,OpenFlow13')
-    issue_switch_cmd(switch, 'ovs-vsctl set-manager ptcp:6640:0.0.0.0')
+    #issue_switch_cmd(switch, 'ovs-vsctl set-manager ptcp:6640:0.0.0.0')
     # issue_switch_cmd(switch, 'ovs-ofctl -O OpenFlow13  dump-flows br-int')
 
     # Note: controller and switch are in root namespace, and we
@@ -97,7 +113,7 @@ def issue_switch_cmd(switch, cmd):
 
 def step_wise_testing(h0, h1, ping_results):
     while True:
-        if 'is_connected' not in quietRun('ovs-vsctl show'):
+        if not ctl_connect_pattern.match(quietRun('ovs-vsctl show')):
             wait_for_controller_connection()
         print "Press ENTER to execute Test\n"
         line = sys.stdin.readline()
@@ -109,7 +125,7 @@ def step_wise_testing(h0, h1, ping_results):
 
 def continuous_testing(h0, h1, ping_results):
     while True:
-        if 'is_connected' not in quietRun('ovs-vsctl show'):
+        if not ctl_connect_pattern.match(quietRun('ovs-vsctl show')):
             wait_for_controller_connection()
         ping_test(h0, h1, ping_results)
         time.sleep(1)
@@ -117,6 +133,8 @@ def continuous_testing(h0, h1, ping_results):
 
 def ping_test(h0, h1, ping_results):
     info("*** Running test\n")
+    info("Arp Table of h0\n")
+    print h0.cmdPrint("arp -n")
     ping_res = h0.cmdPrint('ping -c1 ' + h1.IP())
     ping_res = pingparser.parse(ping_res)
     tm_local = time.localtime()
