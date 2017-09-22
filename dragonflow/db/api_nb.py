@@ -211,8 +211,13 @@ class NbApi(object):
            id/topic fields.
         """
         model = type(obj)
-        full_obj = self.get(obj)
+       #  try:
+       #      full_obj = self.get(obj)
+       #  except Exception as e:
+       #      self.create(obj,skip_send_event)
+       #      return
 
+        full_obj = self.get(obj)
         if full_obj is None:
             raise df_exceptions.DBKeyNotFound(key=obj.id)
 
@@ -282,5 +287,8 @@ class NbApi(object):
            with a specific topic.
         """
         all_values = self.driver.get_all_entries(model.table_name, topic)
+        # TODO: This is a fix from Omars Mail
+        if not all_values:
+            return ()
         all_objects = [model.from_json(e) for e in all_values]
         return model.on_get_all_post(all_objects)

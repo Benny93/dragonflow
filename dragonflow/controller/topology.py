@@ -19,7 +19,7 @@ from dragonflow.common import constants
 from dragonflow.db import db_store
 from dragonflow.db.models import l2
 from dragonflow.db.models import migration
-from dragonflow.db.models import ovs
+# from dragonflow.db.models import ovs
 
 LOG = log.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class Topology(object):
 
     def __init__(self, controller, enable_selective_topology_distribution):
         self.ovs_port_type = (constants.OVS_VM_INTERFACE,
+                              constants.OVS_BRIDGE_INTERFACE,
                               constants.OVS_TUNNEL_INTERFACE,
                               constants.OVS_PATCH_INTERFACE)
 
@@ -51,9 +52,11 @@ class Topology(object):
         self.chassis_name = controller.get_chassis_name()
         self.db_store = db_store.get_instance()
 
-        ovs.OvsPort.register_created(self.ovs_port_updated)
-        ovs.OvsPort.register_updated(self.ovs_port_updated)
-        ovs.OvsPort.register_deleted(self.ovs_port_deleted)
+        # ovs.OvsPort.register_created(self.ovs_port_updated)
+        # ovs.OvsPort.register_updated(self.ovs_port_updated)
+        # ovs.OvsPort.register_deleted(self.ovs_port_deleted)
+
+
 
     def ovs_port_updated(self, ovs_port, orig_ovs_port=None):
         """
@@ -80,6 +83,9 @@ class Topology(object):
 
         self.ovs_ports[port_id] = ovs_port
         port_type = ovs_port.type
+        if port_type is constants.OVS_BRIDGE_INTERFACE:
+            port_type = constants.OVS_VM_INTERFACE
+
         if port_type not in self.ovs_port_type:
             LOG.info("Unmanaged port online: %s", ovs_port)
             return
@@ -108,6 +114,9 @@ class Topology(object):
             return
 
         port_type = ovs_port.type
+        if port_type is constants.OVS_BRIDGE_INTERFACE:
+            port_type = constants.OVS_VM_INTERFACE
+
         if port_type not in self.ovs_port_type:
             LOG.info("Unmanaged port offline: %s", ovs_port)
             return

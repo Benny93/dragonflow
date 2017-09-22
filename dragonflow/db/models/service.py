@@ -75,8 +75,9 @@ class Service(mf.ModelBase):
         :type binary:   String
         """
         instance = nb_api.get(cls(id=service_id))
-        instance.refresh_last_seen()
-        nb_api.update(instance, skip_send_event=True)
+        if instance:
+           instance.refresh_last_seen()
+           nb_api.update(instance, skip_send_event=True)
 
     @classmethod
     def update_last_seen(cls, nb_api, chassis, binary):

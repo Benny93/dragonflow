@@ -323,9 +323,11 @@ class RedisDbDriver(db_api.DbApi):
 
     def _uuid_to_key(self, table, key, topic):
         if not topic:
-            local_key = ('{' + table + '.' + '}' + '.' + key)
+            #local_key = ('{' + table + '.' + '}' + '.' + key)
+            local_key = ('{{{}.}}.{}'.format(table,key))
         else:
-            local_key = ('{' + table + '.' + topic + '}' + '.' + key)
+            #local_key = ('{' + table + '.' + topic + '}' + '.' + key)
+            local_key = ('{{{}.{}}}.{}'.format(table, topic,key))
         return local_key
 
     def _get_client(self, key=None, host=None):

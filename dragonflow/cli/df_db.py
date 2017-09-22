@@ -70,6 +70,7 @@ def print_whole_table(db_driver, table):
         print('Table is empty: ' + table)
         return
 
+    print ('Contents of Table: ' + table)
     raw_values = [db_driver.get_key(table, key) for key in keys]
     values = [jsonutils.loads(value) for value in raw_values if value]
     if isinstance(values[0], dict):

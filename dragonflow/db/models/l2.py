@@ -191,3 +191,40 @@ class LogicalPort(mf.ModelBase, mixins.Name, mixins.Version, mixins.Topic,
             elif not cls_definition:  # Display only instnaces, not classes
                 data[name] = getattr(self, name)
         return str(data)
+
+class LogicalSimplePort(mf.ModelBase, mixins.Name, mixins.BasicEvents):
+    table_name = "lport"
+    port_num = fields.IntField(False)
+    ips = df_fields.ListOfField(df_fields.IpAddressField())
+    subnets = df_fields.ReferenceListField(Subnet)
+    macs = df_fields.ListOfField(df_fields.MacAddressField())
+    enabled = fields.BoolField()
+    lswitch = df_fields.ReferenceField(LogicalSwitch)
+    qos_policy = df_fields.ReferenceField(qos.QosPolicy)
+
+    @property
+    def ip(self):
+        try:
+            return self.ips[0]
+        except IndexError:
+            return None
+
+    @property
+    def mac(self):
+        try:
+            return self.macs[0]
+        except IndexError:
+            return None
+
+    def __str__(self):
+        data = {}
+        for name in dir(self):
+            if name.startswith('_'):
+                continue
+            cls_definition = getattr(self.__class__, name, None)
+            if isinstance(cls_definition, fields.BaseField):
+                if name in self._set_fields:
+                    data[name] = getattr(self, name)
+            elif not cls_definition:  # Display only instnaces, not classes
+                data[name] = getattr(self, name)
+        return str(data)

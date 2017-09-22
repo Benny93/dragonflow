@@ -27,7 +27,10 @@ from ryu import utils
 
 from dragonflow.controller.common import constants
 from dragonflow.controller import dispatcher
-
+from ryu.topology import event, switches
+from ryu.topology.api import get_link, get_switch
+from dragonflow.db.models import l2
+from dragonflow.db.models import core
 
 LOG = log.getLogger(__name__)
 
@@ -35,6 +38,26 @@ LOG = log.getLogger(__name__)
 class RyuDFAdapter(ofp_handler.OFPHandler):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     OF_AUTO_PORT_DESC_STATS_REQ_VER = 0x04
+
+    call_on_datapath_set = None
+    ctrl = None
+    chassis = core.Chassis(
+        id='whoami',
+        ip='172.24.4.50',
+        tunnel_types=('vxlan',),
+    )
+
+    local_binding = l2.PortBinding(
+        type=l2.BINDING_CHASSIS,
+        chassis=chassis,
+    )
+    fake_lswitch_default_subnets = [l2.Subnet(dhcp_ip="192.168.123.0",
+                                                   name="private-subnet",
+                                                   enable_dhcp=True,
+                                                   topic="fake_tenant1",
+                                                   gateway_ip="192.168.123.1",
+                                                   cidr="192.168.123.0/24",
+                                                   id="fake_subnet1")]
 
     def __init__(self, vswitch_api, nb_api,
                  neutron_server_notifier=None):
@@ -48,17 +71,19 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
         self.table_handlers = {}
         self.first_connect = True
 
+
     @property
     def datapath(self):
         return self._datapath
 
     def start(self):
         super(RyuDFAdapter, self).start()
+
         self.load(self,
                   vswitch_api=self.vswitch_api,
                   nb_api=self.nb_api,
                   neutron_server_notifier=self.neutron_server_notifier)
-        self.wait_until_ready()
+        #self.wait_until_ready()
 
     def load(self, *args, **kwargs):
         self.dispatcher.load(*args, **kwargs)
@@ -68,6 +93,7 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
 
     def wait_until_ready(self):
         while not self.is_ready():
+            LOG.debug("Not ready. Going to sleep 3")
             time.sleep(3)
 
     def register_table_handler(self, table_id, handler):
@@ -93,11 +119,20 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
     def notify_ovs_sync_started(self):
         self.dispatcher.dispatch('ovs_sync_started')
 
+
+    @handler.set_ev_cls(ofp_event.EventOFPStateChange,
+                [handler.MAIN_DISPATCHER, handler.DEAD_DISPATCHER])
+    def state_change_handler(self, ev):
+        dp = ev.datapath
+
     @handler.set_ev_handler(ofp_event.EventOFPSwitchFeatures,
                             handler.CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         # TODO(oanson) is there a better way to get the datapath?
-        self._datapath = ev.msg.datapath
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        self._datapath = datapath
         super(RyuDFAdapter, self).switch_features_handler(ev)
         version = self.datapath.ofproto.OFP_VERSION
         if version < RyuDFAdapter.OF_AUTO_PORT_DESC_STATS_REQ_VER:
@@ -115,7 +150,14 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
                                            constants.CONTROLLER_REINITIALIZE,
                                            None)
         self.first_connect = False
-        self.vswitch_api.initialize(self.nb_api)
+        #self.vswitch_api.initialize(self.nb_api)
+        if RyuDFAdapter.call_on_datapath_set is not None:
+            RyuDFAdapter.call_on_datapath_set(RyuDFAdapter.ctrl)
+        # install table miss flow
+        # match = parser.OFPMatch()
+        # actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
+        #                                   ofproto.OFPCML_NO_BUFFER)]
+        # self.add_flow(datapath, 0, match, actions)
 
     def _send_port_desc_stats_request(self, datapath):
         ofp_parser = datapath.ofproto_parser
@@ -199,3 +241,52 @@ class RyuDFAdapter(ofp_handler.OFPHandler):
             [cur_config.flow_removed_mask[0], cur_config.flow_removed_mask[1]])
         dp.send_msg(m)
         LOG.info('Set SW config for TTL error packet in.')
+
+    @handler.set_ev_cls(event.EventSwitchEnter)
+    def get_topology_data(self, ev):
+        switch_list = get_switch(self, None)  # .topology_api_app
+        for switch in switch_list:
+            lswitch =self.create_switch(switch)
+            for p in switch.ports:
+                print 'create port {}'.format(p)
+                self.create_port(switch.dp, p.hw_addr, p.port_no, lswitch)
+
+    def create_switch(self, switch):
+        return l2.LogicalSwitch(
+            subnets= self.fake_lswitch_default_subnets,
+            unique_key=1,
+            name='private',
+            is_external=False,
+            segmentation_id=41,
+            mtu=1450,
+            topic='whoami',
+            id='{}'.format(switch.dp.id),
+            version=5)
+
+    def create_port(self, dp, mac, port_no, lswitch):
+        ips = ('0.0.0.0',)
+        p_id = 'lport_{0}'.format(port_no)
+        new_port = l2.LogicalPort(
+            id=p_id,
+            topic="debug-topic",
+            name='logical_port',
+            unique_key=2,
+            version=2,
+            ips=ips,
+            subnets=None,
+            macs=[mac],
+            binding=self.local_binding,
+            lswitch=lswitch,
+            security_groups=['fake_security_group_id1'],
+            allowed_address_pairs=[],
+            port_security_enabled=False,
+            device_owner='whoami',
+            device_id='fake_device_id',
+            # binding_vnic_type=binding_vnic_type,
+            dhcp_params={},
+        )
+        self.nb_api.create(new_port)
+        new_port.emit_created()
+        new_port._emit(event=l2.EVENT_BIND_LOCAL)
+        return new_port
+

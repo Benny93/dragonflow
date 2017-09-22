@@ -32,6 +32,7 @@ LOG = log.getLogger(__name__)
 def enum(**enums):
     return type('Enum', (), enums)
 
+
 RET_CODE = enum(
     NOT_CHANGE=0,
     NODES_CHANGE=1,
@@ -42,7 +43,6 @@ INTERVAL_TIME = 3
 
 
 class RedisMgt(object):
-
     redisMgt = {}
     global_sharedlist = multiprocessing.Array(ctypes.c_char, MEM_SIZE)
 
@@ -96,7 +96,7 @@ class RedisMgt(object):
 
     def release_default_node(self):
         try:
-            self.default_node.connection_pool.get_connection(None, None).\
+            self.default_node.connection_pool.get_connection(None, None). \
                 disconnect()
             self.default_node.connection_pool.reset()
         except Exception as e:
@@ -109,6 +109,12 @@ class RedisMgt(object):
     def _parse_node_line(self, line):
         line_items = line.split(' ')
         ret = line_items[:8]
+        # Fix for Redis 3.2 and up...
+        if "@" in ret[1]:
+            ret[1] = ret[1][:ret[1].find("@")]
+        if ret[1].startswith(":"):
+            ret[1] = "127.0.0.1" + ret[1]
+
         slots = []
         for sl in line_items[8:]:
             slot_range = sl.split('-')
@@ -164,7 +170,7 @@ class RedisMgt(object):
                 continue
 
             node_id, ip_port, flags, master_id, ping, pong, epoch, \
-                status, slots = self._parse_node_line(line)
+            status, slots = self._parse_node_line(line)
             role = flags
 
             if ',' in flags:

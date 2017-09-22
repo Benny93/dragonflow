@@ -9,6 +9,7 @@ from ryu.lib.packet import ether_types
 from ryu.topology.api import get_link, get_switch
 from ryu.topology import event, switches
 
+from dragonflow.common.exceptions import DBKeyNotFound
 from dragonflow.db import db_store, api_nb
 from dragonflow.db.models import l2
 
@@ -16,17 +17,27 @@ from dragonflow.tests.df_standalone import controller_concept
 
 from dragonflow.neutron.common import config as common_config
 import sys
-
-from dragonflow.common.exceptions import DBKeyNotFound
-
+from dragonflow.db.models import core
 
 # class dfs_app_base(app_manager.RyuApp):
 #     def __init__(self, *args, **kwargs):
 #         super(dfs_app_base, self).__init__(*args, **kwargs)
 
 
+
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    chassis = core.Chassis(
+        id='whoami',
+        ip='172.24.4.50',
+        tunnel_types=('vxlan',),
+    )
+
+    local_binding = l2.PortBinding(
+        type=l2.BINDING_CHASSIS,
+        chassis=chassis,
+    )
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
@@ -61,6 +72,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
+
+        return
         # install table-miss flow entry
         #
         # We specify NO BUFFER to max_len of the output action due to
@@ -182,6 +195,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         #         #                                enabled=True,
         #         #                                version=2)
         #         #self.nb_api.driver.create_key(l2.LogicalPort.table_name, "{}:{}".format(switch.dp.id, port.port_no), port.hw_addr)
+        for switch in switch_list:
+            for p in switch.ports:
+                print 'create port {}'.format(p)
+                self.create_port(switch.dp, p.hw_addr, p.port_no)
 
         print ("Switch ENTER Done")
 
@@ -195,8 +212,37 @@ class SimpleSwitch13(app_manager.RyuApp):
     def update_mac_to_port(self, dpid, mac, port):
         table_name = l2.LogicalPort.table_name
         key = "{}:{}".format(dpid, mac)
-        try:
-            self.nb_api.driver.get_key(table_name, key)
-            self.nb_api.driver.set_key(table_name, key, port)
-        except DBKeyNotFound:
-            self.nb_api.driver.create_key(table_name, key, port)
+        # try:
+        #     #self.nb_api.driver.get_key(table_name, key)
+        #     #self.nb_api.driver.set_key(table_name, key, port)
+        #     self.nb_api.get()
+        # except DBKeyNotFound:
+            #self.nb_api.driver.create_key(table_name, key, port)
+        self.nb_api.create(l2.LogicalPort(mac=mac))
+        self.create_port(dpid,mac,port)
+
+    def create_port(self, dpid, mac , port_no):
+        ips = ('0.0.0.0',)
+        p_id = 'lport_{0}'.format(port_no)
+        new_port = l2.LogicalPort(
+            id=p_id,
+            topic="debug-topic",
+            name='logical_port',
+            unique_key=2,
+            version=2,
+            ips=ips,
+            subnets=None,
+            macs=[mac],
+            binding=self.local_binding,
+            lswitch='{}'.format(dpid),
+            security_groups=['fake_security_group_id1'],
+            allowed_address_pairs=[],
+            port_security_enabled=False,
+            device_owner='whoami',
+            device_id='fake_device_id',
+            # binding_vnic_type=binding_vnic_type,
+            dhcp_params={},
+        )
+        self.nb_api.create(new_port)
+        new_port.emit_created()
+        return new_port

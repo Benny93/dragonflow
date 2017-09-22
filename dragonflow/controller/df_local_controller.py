@@ -17,7 +17,7 @@ import sys
 
 from dragonflow.neutron.common import config as common_config
 from oslo_log import log
-from oslo_service import loopingcall
+from oslo_service import loopingcall, time
 from ryu.app.ofctl import service as of_service
 from ryu.base import app_manager
 from ryu import cfg as ryu_cfg
@@ -44,6 +44,8 @@ LOG = log.getLogger(__name__)
 
 
 class DfLocalController(object):
+    instance = None
+
     def __init__(self, chassis_name, nb_api):
         self.db_store = db_store.get_instance()
         self.chassis_name = chassis_name
@@ -52,7 +54,7 @@ class DfLocalController(object):
         # Virtual tunnel port support multiple tunnel types together
         self.tunnel_types = cfg.CONF.df.tunnel_types
         self.sync_finished = False
-        self.vswitch_api = vswitch_impl.OvsApi(cfg.CONF.df.management_ip)
+       # self.vswitch_api = vswitch_impl.OvsApi(cfg.CONF.df.management_ip)
         self.neutron_notifier = None
         if cfg.CONF.df.enable_neutron_notifier:
             self.neutron_notifier = df_utils.load_driver(
@@ -63,7 +65,7 @@ class DfLocalController(object):
         self.open_flow_app = app_mgr.instantiate(
             ryu_base_app.RyuDFAdapter,
             nb_api=self.nb_api,
-            vswitch_api=self.vswitch_api,
+            vswitch_api=None,
             neutron_server_notifier=self.neutron_notifier,
         )
 
@@ -85,7 +87,7 @@ class DfLocalController(object):
             max_rate=1, time_unit=db_common.DB_SYNC_MINIMUM_INTERVAL)
 
     def run(self):
-        self.vswitch_api.initialize(self.nb_api)
+        #self.vswitch_api.initialize(self.nb_api)
         self.nb_api.register_notification_callback(self._handle_update)
         if cfg.CONF.df.enable_neutron_notifier:
             self.neutron_notifier.initialize(nb_api=self.nb_api,
@@ -101,20 +103,34 @@ class DfLocalController(object):
         # for reliability, here we should check if controller is set for OVS,
         # if yes, don't set controller and don't delete controller.
         # if no, set controller
-        targets = ('tcp:' + cfg.CONF.df_ryu.of_listen_address + ':' +
-                   str(cfg.CONF.df_ryu.of_listen_port))
-        is_controller_set = self.vswitch_api.check_controller(targets)
-        integration_bridge = cfg.CONF.df.integration_bridge
-        if not is_controller_set:
-           self.vswitch_api.set_controller(integration_bridge, [targets])
-        is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
-           'secure')
-        if not is_fail_mode_set:
-           self.vswitch_api.set_controller_fail_mode(
-              integration_bridge, 'secure')
+        # targets = ('tcp:' + cfg.CONF.df_ryu.of_listen_address + ':' +
+        #            str(cfg.CONF.df_ryu.of_listen_port))
+        # is_controller_set = self.vswitch_api.check_controller(targets)
+        # integration_bridge = cfg.CONF.df.integration_bridge
+        # if not is_controller_set:
+        #    self.vswitch_api.set_controller(integration_bridge, [targets])
+        # is_fail_mode_set = self.vswitch_api.check_controller_fail_mode(
+        #    'secure')
+        # if not is_fail_mode_set:
+        #    self.vswitch_api.set_controller_fail_mode(
+        #       integration_bridge, 'secure')
 
         self.open_flow_service.start()
         self.open_flow_app.start()
+        import gc
+        from ryu.controller.ofp_handler import OpenFlowController
+        objs = gc.get_objects()
+        for obj in objs:
+            if type(obj) is OpenFlowController:
+                obj.__call__()
+        # Apps are now started
+        # WAIT UNTIL DATAPATH SET
+        # DF original waited here until the datapath is set.
+        # I will move the remaining code of this function to
+        # the place where datapath is set (switch feature event)
+        # call self.on_datapath_set()
+
+    def on_datapath_set(self):
         self._register_models()
         self.register_chassis()
         self.sync()
@@ -297,7 +313,7 @@ class DfLocalController(object):
         action = update.action
         if action == ctrl_const.CONTROLLER_REINITIALIZE:
             self.db_store.clear()
-            self.vswitch_api.initialize(self.nb_api)
+            #self.vswitch_api.initialize(self.nb_api)
             self.sync()
         elif action == ctrl_const.CONTROLLER_SYNC:
             self.sync()
@@ -346,5 +362,9 @@ def main():
     init_ryu_config()
     nb_api = api_nb.NbApi.get_instance(False)
     controller = DfLocalController(chassis_name, nb_api)
+    DfLocalController.instance = controller
+    ryu_base_app.RyuDFAdapter.call_on_datapath_set = DfLocalController.on_datapath_set
+    ryu_base_app.RyuDFAdapter.ctrl = controller
     service.register_service('df-local-controller', nb_api, controller)
     controller.run()
+

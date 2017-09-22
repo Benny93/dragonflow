@@ -26,6 +26,10 @@ from dragonflow.controller.common import constants
 from dragonflow.controller.common import cookies
 from dragonflow.db import db_store
 
+# from ryu.topology.api import get_link, get_switch
+# from ryu.controller.handler import set_ev_cls
+# from ryu.topology import event, switches
+
 
 # TODO(heshan) This timeout constant should be configured in cfg file
 DEFAULT_GET_FLOWS_TIMEOUT = 20
@@ -262,6 +266,17 @@ class DFlowApp(object):
                                   old_cookie=old_cookie, old_mask=old_mask,
                                   is_local=True,
                                   app_name=self.__class__.__name__)
+    # STANDALONE EXTENSION
+    # @set_ev_cls(event.EventSwitchEnter)
+    # def get_topology_data(self, ev):
+    #     switch_list = get_switch(self, None)  # .topology_api_app
+    #     switches = [switch.dp.id for switch in switch_list]
+    #     print "switches: ", switches
+
+    #     links_list = get_link(self, switches[0])  # .topology_api_app ,None
+    #     links = [(link.src.dpid, link.dst.dpid, {'port': link.src.port_no}) for link in links_list]
+    #     print "links_list: ", links_list  # [0]
+    #     print "links", links
 
 
 def register_event(model, event):

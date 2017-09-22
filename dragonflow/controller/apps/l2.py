@@ -96,7 +96,8 @@ class L2App(df_base_app.DFlowApp):
         if not self.is_install_l2_responder:
             return
         ips = lport.ips
-        network_id = lport.lswitch.unique_key
+        #network_id = lport.lswitch.unique_key
+        network_id =1
         mac = lport.mac
         for ip in ips:
             ip_version = ip.version
@@ -297,19 +298,19 @@ class L2App(df_base_app.DFlowApp):
 
     def _add_port(self, lport):
         mac = lport.mac
-        network_id = lport.lswitch.unique_key
-        port_key = lport.unique_key
+        # network_id = lport.lswitch.unique_key
+        # port_key = lport.unique_key
 
-        # REVISIT(xiaohhui): This check might be removed when l3-agent is
-        # obsoleted.
-        if lport.device_owner != common_const.DEVICE_OWNER_ROUTER_INTF:
-            self._add_dst_classifier_flow_for_port(network_id, mac, port_key)
+        # # REVISIT(xiaohhui): This check might be removed when l3-agent is
+        # # obsoleted.
+        # if lport.device_owner != common_const.DEVICE_OWNER_ROUTER_INTF:
+        #    self._add_dst_classifier_flow_for_port(network_id, mac, port_key)
         self._add_l2_responders(lport)
 
     @df_base_app.register_event(l2.LogicalPort, l2.EVENT_BIND_LOCAL)
     def _add_local_port(self, lport):
         self._add_port(lport)
-        self._add_local_port_dispatch(lport)
+        #self._add_local_port_dispatch(lport)
 
     def _add_local_port_dispatch(self, lport):
         lport_id = lport.id

@@ -22,6 +22,9 @@ def _get_interface_type(row):
     interface_type = row.type
     interface_name = row.name
 
+    #TODO
+    #return constants.OVS_VM_INTERFACE
+
     if interface_type == "internal" and "br" in interface_name:
         return constants.OVS_BRIDGE_INTERFACE
 
