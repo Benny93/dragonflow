@@ -68,6 +68,7 @@ class DfStandaloneController2(df_local_controller.DfLocalController):
         self.open_flow_app.start()
         self.ryu_switches.start()
         self.force_ryu_server()
+        self.on_datapath_set()
 
 
         # def register_chassis(self):
@@ -96,6 +97,11 @@ class DfStandaloneController2(df_local_controller.DfLocalController):
         #    self.nb_api.update(chassis, skip_send_event=True)
 
     def force_ryu_server(self):
+        """
+        QuickFix for bug where ryu does not start
+        TODO: remove
+        :return:
+        """
         import gc
         from ryu.controller.ofp_handler import OpenFlowController
         objs = gc.get_objects()
@@ -107,12 +113,18 @@ class DfStandaloneController2(df_local_controller.DfLocalController):
     def on_datapath_set(self):
         self._register_models()
         # self.register_chassis()
-        # self.nb_api.process_changes()
+        self.sync()
+        self.nb_api.process_changes()
+
+
+    def sync(self):
+       # self.topology.check_topology_info()
+        self._sync.sync()
 
     @set_ev_cls(ofp_event.EventOFPStateChange,
                 [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def state_change_handler(self, ev):
-        print "success"
+        print "State change "
 
     @set_ev_cls(event.EventSwitchEnter)
     def get_topology_data(self, ev):

@@ -142,6 +142,7 @@ EVENT_UNBIND_REMOTE = 'unbind_remote'
 class LogicalPort(mf.ModelBase, mixins.Name, mixins.Version, mixins.Topic,
                   mixins.UniqueKey, mixins.BasicEvents):
     table_name = "lport"
+    port_no = fields.StringField()
     ips = df_fields.ListOfField(df_fields.IpAddressField())
     subnets = df_fields.ReferenceListField(Subnet)
     macs = df_fields.ListOfField(df_fields.MacAddressField())

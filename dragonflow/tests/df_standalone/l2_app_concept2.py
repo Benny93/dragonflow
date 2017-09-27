@@ -19,6 +19,11 @@ from dragonflow.neutron.common import config as common_config
 import sys
 from dragonflow.db.models import core
 
+from oslo_log import log
+
+LOG = log.getLogger(__name__)
+
+
 # class dfs_app_base(app_manager.RyuApp):
 #     def __init__(self, *args, **kwargs):
 #         super(dfs_app_base, self).__init__(*args, **kwargs)
@@ -39,6 +44,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         chassis=chassis,
     )
 
+    cache_lports = {}
+    cache_switches = {}
+
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         # self.mac_to_port = {}
@@ -58,13 +66,32 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.controller = controller_concept.DfStandaloneController(
             'df_standalone', self.nb_api)
         self.db_store = db_store.get_instance()
+        self.controller.on_datapath_set()
+        self.nb_api.on_db_change = self.db_change_callback
+
+        self.cache_lports = {}
+        lports = self.nb_api.get_all(l2.LogicalPort)
+        lswitches = self.nb_api.get_all(l2.LogicalSwitch)
+        for lswitch in lswitches:
+            dpid = lswitch.id
+            for lport in lports:
+                if lport.lswitch == lswitch.id:
+                    self.cache_switches[lswitch.id][lport.id] = lport
+
+        for lport in lports:
+            self.cache_lports[lport.id] = lport
 
 
+        # TODO: switch leave
+        #TODO: filter for datapath
 
 
 
         # TODO Controllername
         # self.controller.register_topic("fake_tenant1")
+
+    def db_change_callback(self, table, key, action, value, topic=None):
+        print("Received Update:")
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -72,8 +99,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-
-        return
         # install table-miss flow entry
         #
         # We specify NO BUFFER to max_len of the output action due to
@@ -172,18 +197,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         links = [(link.src.dpid, link.dst.dpid, {'port': link.src.port_no}) for link in links_list]
         print "links_list: ", links_list  # [0]
         print "links", links
-        # local_switch = l2.LogicalSwitch(
-        #     subnets=self.fake_lswitch_default_subnets,
-        #     network_type='local',
-        #     id='fake_local_switch1',
-        #     segmentation_id=41,
-        #     mtu=1500,
-        #     topic='fake_tenant1',
-        #     unique_key=1,
-        #     is_external=False,
-        #     name='private')
-        # self.controller.on_datapath_set()
-        # self.nb_api.update(local_switch)
+
+        #TODO: Create only if not exisiting
+
+
         # # update store with ports
         # for switch in switch_list:
         #     for port in switch.ports:
@@ -196,6 +213,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         #         #                                version=2)
         #         #self.nb_api.driver.create_key(l2.LogicalPort.table_name, "{}:{}".format(switch.dp.id, port.port_no), port.hw_addr)
         for switch in switch_list:
+            self.create_switch(switch)
             for p in switch.ports:
                 print 'create port {}'.format(p)
                 self.create_port(switch.dp, p.hw_addr, p.port_no)
@@ -203,29 +221,35 @@ class SimpleSwitch13(app_manager.RyuApp):
         print ("Switch ENTER Done")
 
     def get_port_from_mac(self, dpid, mac):
-        try:
-            port = self.nb_api.driver.get_key(l2.LogicalPort.table_name, "{}:{}".format(dpid, mac))
-            return int(port)
-        except DBKeyNotFound:
-            return None
+        for _, lport in self.cache_lports.iteritems():
+            if mac in lport.macs:
+                return int(lport.port_no)
+        # if nothing was found in cache
+        # TODO check db???
+        return None
 
     def update_mac_to_port(self, dpid, mac, port):
-        table_name = l2.LogicalPort.table_name
-        key = "{}:{}".format(dpid, mac)
-        # try:
-        #     #self.nb_api.driver.get_key(table_name, key)
-        #     #self.nb_api.driver.set_key(table_name, key, port)
-        #     self.nb_api.get()
-        # except DBKeyNotFound:
-            #self.nb_api.driver.create_key(table_name, key, port)
-        self.nb_api.create(l2.LogicalPort(mac=mac))
-        self.create_port(dpid,mac,port)
+        port_id = "lport_{}".format(port)
+        # check cache:
+        # TODO: check for host migration
+        if port_id in self.cache_lports:
+            cport = self.cache_lports[port_id]
+            if mac not in cport.macs:
+                # update cache
+                cport.macs.append(mac)
+                # update db
+                self.nb_api.update(cport)
+        else:
+            # new learned port!
+            # write to database
+            self.cache_lports[port_id] = self.create_port(dpid, mac, port)
 
-    def create_port(self, dpid, mac , port_no):
+    def create_port(self, dpid, mac, port_no):
         ips = ('0.0.0.0',)
         p_id = 'lport_{0}'.format(port_no)
         new_port = l2.LogicalPort(
             id=p_id,
+            port_no=str(port_no),
             topic="debug-topic",
             name='logical_port',
             unique_key=2,
@@ -243,6 +267,20 @@ class SimpleSwitch13(app_manager.RyuApp):
             # binding_vnic_type=binding_vnic_type,
             dhcp_params={},
         )
+        self.cache_lports[p_id] = new_port
         self.nb_api.create(new_port)
         new_port.emit_created()
         return new_port
+
+    def create_switch(self, switch):
+        local_switch = l2.LogicalSwitch(
+            subnets=self.fake_lswitch_default_subnets,
+            network_type='local',
+            id='{}'.format(switch.dp.id),
+            segmentation_id=41,
+            mtu=1500,
+            topic='fake_tenant1',
+            unique_key=int(switch.dp.id),
+            is_external=False,
+            name='private')
+        self.nb_api.create(local_switch)

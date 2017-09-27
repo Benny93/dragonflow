@@ -17,7 +17,7 @@ Vagrant.configure("2") do |config|
     # Every Vagrant development environment requires a box. You can search for
     # boxes at https://atlas.hashicorp.com/search.
     config.vm.box = vagrant_config['box']
-    config.vm.box_version = '20170512.0.0'
+#    config.vm.box_version = '20170512.0.0'
 
     if Vagrant.has_plugin?("vagrant-cachier")
         # Configure cached packages to be shared between instances of the same base box.
@@ -117,7 +117,7 @@ Vagrant.configure("2") do |config|
     end
 
     config.vm.define "router" do |router|
-        router.vm.box='debian/stretch64'
+#        router.vm.box='ubuntu/xenial64'
         router.vm.host_name = vagrant_config['router']['host_name']
         router.vm.network "private_network",
             ip: vagrant_config['router']['ip1'],

@@ -1,5 +1,5 @@
 ---
-box: "ubuntu/trusty64"
+box: "bento/ubuntu-16.04"
 controller1:
     host_name: controller1
     ip: "192.168.33.101"

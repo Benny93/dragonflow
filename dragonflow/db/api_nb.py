@@ -27,7 +27,7 @@ from dragonflow.common import utils as df_utils
 from dragonflow.db import db_common
 from dragonflow.db import model_proxy as mproxy
 from dragonflow.db.models import core
-
+from dragonflow.db import db_store
 
 LOG = log.getLogger(__name__)
 _nb_api = None
@@ -41,6 +41,7 @@ def _get_topic(obj):
 
 
 class NbApi(object):
+    on_db_change = None
 
     def __init__(self, db_driver, use_pubsub=False, is_neutron_server=False):
         super(NbApi, self).__init__()
@@ -57,6 +58,7 @@ class NbApi(object):
         if self.is_neutron_server:
             # multiproc pub/sub is only supported in neutron server
             self.pub_sub_use_multiproc = cfg.CONF.df.pub_sub_use_multiproc
+        self.db_store = db_store.get_instance()
 
     @staticmethod
     def get_instance(is_neutron_server):
@@ -132,9 +134,9 @@ class NbApi(object):
         self.subscriber.register_topic(db_common.SEND_ALL_TOPIC)
         publishers_ips = cfg.CONF.df.publishers_ips
         uris = {'%s://%s:%s' % (
-                cfg.CONF.df.publisher_transport,
-                ip,
-                cfg.CONF.df.publisher_port) for ip in publishers_ips}
+            cfg.CONF.df.publisher_transport,
+            ip,
+            cfg.CONF.df.publisher_port) for ip in publishers_ips}
         publishers = self.get_all(core.Publisher)
         uris |= {publisher.uri for publisher in publishers}
         for uri in uris:
@@ -179,6 +181,8 @@ class NbApi(object):
         update = db_common.DbUpdate(table, key, action, value, topic=topic)
         LOG.debug("Pushing Update to Queue: %s", update)
         self._queue.put(update)
+        if not self.on_db_change is None:
+            self.on_db_change(table, key, action, value, topic=topic)
         time.sleep(0)
 
     def process_changes(self):
@@ -211,11 +215,11 @@ class NbApi(object):
            id/topic fields.
         """
         model = type(obj)
-       #  try:
-       #      full_obj = self.get(obj)
-       #  except Exception as e:
-       #      self.create(obj,skip_send_event)
-       #      return
+        #  try:
+        #      full_obj = self.get(obj)
+        #  except Exception as e:
+        #      self.create(obj,skip_send_event)
+        #      return
 
         full_obj = self.get(obj)
         if full_obj is None:
@@ -292,3 +296,9 @@ class NbApi(object):
             return ()
         all_objects = [model.from_json(e) for e in all_values]
         return model.on_get_all_post(all_objects)
+
+    # Usage of store for faster performance but weak consistency.
+    def get_all_weak(self, model, topic=None):
+        if not self.db_store:
+            self.db_store = db_store.get_instance()
+        return self.db_store.get_all(model)
