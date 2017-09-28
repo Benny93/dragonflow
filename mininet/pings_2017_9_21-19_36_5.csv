@@ -1,6 +1,0 @@
-received,host,jitter,packet_loss,avgping,minping,time,sent,maxping
-0,192.168.123.2,NaN,100,NaN,NaN,19:35:20,1,NaN
-0,192.168.123.2,NaN,100,NaN,NaN,19:35:31,1,NaN
-0,192.168.123.2,NaN,100,NaN,NaN,19:35:42,1,NaN
-0,192.168.123.2,NaN,100,NaN,NaN,19:35:53,1,NaN
-0,192.168.123.2,NaN,100,NaN,NaN,19:36:4,1,NaN
