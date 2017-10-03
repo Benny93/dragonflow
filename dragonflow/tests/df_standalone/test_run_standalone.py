@@ -13,8 +13,10 @@ def main():
     #     else:
     #         print "unkown option {}".format(option)
     #         exit(1)
-    port = str(input("Specify controller port. Empty is default"))
-
+    try:
+        port = str(input("Specify controller port. Empty is default"))
+    except Exception:
+        port = ""
 
     #sys.argv.append('--config-file')
     #sys.argv.append('/home/vagrant/dragonflow/etc/neutron.conf')
@@ -22,6 +24,7 @@ def main():
     sys.argv.append('/home/vagrant/dragonflow/etc/dragonflow.ini')
     # sys.argv.append('ws_topology.py')
     sys.argv.append('l2_app_concept2.py')
+    sys.argv.append('l3_app_concept2.py')
     # sys.argv.append('/home/vagrant/dragonflow/dragonflow/controller/ryu_base_app.py')
     # sys.argv.append('/home/vagrant/dragonflow/dragonflow/controller/apps/l2.py')
     sys.argv.append('--verbose')

@@ -46,7 +46,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
     cache_ports_by_datapath_id = {}
 
-    USE_CACHE = True
+    USE_CACHE = False
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
@@ -80,8 +80,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                     if lport.lswitch.id == dpid:
                         self.cache_ports_by_datapath_id.setdefault(dpid, {})
                         self.cache_ports_by_datapath_id[dpid][lport.id] = lport
-# TODO Controller name as topic???
-# self.controller.register_topic("fake_tenant1")
+                        # TODO Controller name as topic???
+                        # self.controller.register_topic("fake_tenant1")
 
     def db_change_callback(self, table, key, action, value, topic=None):
         """
@@ -96,11 +96,11 @@ class SimpleSwitch13(app_manager.RyuApp):
         print("Received Update for table {} and key {} action {}".format(table, key, action))
         # These updates are only required if data is cached locally
         if self.USE_CACHE:
-            if table == 'lport':
+            if table == 'lport' and (action == 'create' or action == 'update'):
                 # check if datapath of port can be found in cache
                 cache_dpid = None
-                for dpid, switch_id in self.cache_ports_by_datapath_id.iteritems():
-                    if switch_id == key:
+                for dpid, port_id in self.cache_ports_by_datapath_id.iteritems():
+                    if port_id == key:
                         # this value needs to bee updated
                         # updating values while iterating isn't a good practice: Exit loop and apply update
                         cache_dpid = dpid
@@ -108,7 +108,11 @@ class SimpleSwitch13(app_manager.RyuApp):
                 if not cache_dpid is None:
                     # values was in cache -> update
                     self.cache_ports_by_datapath_id[cache_dpid][key] = self.nb_api.get(l2.LogicalPort(id=key))
-
+                else:
+                    # port not in cache
+                    lport = self.nb_api.get(l2.LogicalPort(id=key))
+                    dpid = lport.lswitch.id
+                    self.cache_ports_by_datapath_id[dpid][lport.id] = lport
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -169,6 +173,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         # self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+
+        # self.print_cache_ports_by_datapath_id()
 
         # learn a mac address to avoid FLOOD next time.
         # self.mac_to_port[dpid][src] = in_port
@@ -280,7 +286,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         # if nothing was found in cache
         return None
 
-
     def update_mac_to_port(self, dpid, mac, port, use_cache=True):
         """
         Can be inconsistent with db
@@ -304,15 +309,16 @@ class SimpleSwitch13(app_manager.RyuApp):
             else:
                 # new learned port!
                 # write to database
-                self.cache_ports_by_datapath_id.setdefault(dpid, {}) # create empty entry if key does not exists
+                self.cache_ports_by_datapath_id.setdefault(dpid, {})  # create empty entry if key does not exists
                 self.cache_ports_by_datapath_id[dpid][port_id] = self.create_port(dpid, mac, port)
         else:
             try:
                 lport = self.nb_api.get(l2.LogicalPort(id=port_id))
-                lport.macs.append(mac)
-                self.nb_api.update(lport)
+                if lport is not None and mac not in lport.macs:
+                    lport.macs.append(mac)
+                    self.nb_api.update(lport)
             except DBKeyNotFound:
-                self.create_port(dpid,mac,port)
+                self.create_port(dpid, mac, port)
 
     def create_port(self, dpid, mac, port_no):
         """
@@ -347,7 +353,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 # binding_vnic_type=binding_vnic_type,
                 dhcp_params={},
             )
-            self.cache_ports_by_datapath_id.setdefault(dpid,{})
+            self.cache_ports_by_datapath_id.setdefault(dpid, {})
             self.cache_ports_by_datapath_id[dpid][p_id] = new_port
             self.nb_api.create(new_port)
             new_port.emit_created()
@@ -373,3 +379,12 @@ class SimpleSwitch13(app_manager.RyuApp):
                 name='private')
             self.nb_api.create(local_switch)
             return local_switch
+
+    # Debug utils
+
+    def print_cache_ports_by_datapath_id(self):
+        for dpid, port_dict in self.cache_ports_by_datapath_id.iteritems():
+            for key in port_dict.keys():
+                print "\ndpid:{}".format(dpid)
+                port = port_dict[key]
+                print "\nPort_id: {}, macs:{}".format(port.id, port.macs)
