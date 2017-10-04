@@ -43,7 +43,7 @@ def Main():
 
     net.build()
     s1.start([c0])
-    s2.start([c1])
+    s2.start([c0])
     s3.start([c1])
 
     s1.cmdPrint('ovs-vsctl show')

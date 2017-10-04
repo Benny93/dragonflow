@@ -14,7 +14,7 @@ def main():
     #         print "unkown option {}".format(option)
     #         exit(1)
     try:
-        port = str(input("Specify controller port. Empty is default"))
+        port = str(input("Specify controller port. Empty is default\nController listens to Port:"))
     except Exception:
         port = ""
 
