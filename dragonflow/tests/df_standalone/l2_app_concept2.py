@@ -227,12 +227,11 @@ class SimpleSwitch13(app_manager.RyuApp):
         # print "links_list: ", links_list  # [0]
         # print "links", links
 
-        # TODO: Create only if not exisiting
         for switch in switch_list:
             self.create_switch(switch)
             for p in switch.ports:
                 print 'create port {}'.format(p)
-                self.create_port(switch.dp.id, p.hw_addr, p.port_no)
+                self.create_port(switch.dp.id,"", p.port_no, p.hw_addr)
 
         print ("Switch ENTER Done")
 
@@ -320,7 +319,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             except DBKeyNotFound:
                 self.create_port(dpid, mac, port)
 
-    def create_port(self, dpid, mac, port_no):
+    def create_port(self, dpid, mac, port_no, hw_addr=""):
         """
         Creates port in db if not exist
         :param dpid:
@@ -331,6 +330,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         ips = ('0.0.0.0',)
         p_id = self.create_port_id(dpid, port_no)
         dpid = str(dpid)
+        macs = []
+        if mac is not "":
+            macs.append(mac)
+
 
         if not self.nb_api.get(l2.LogicalPort(id=p_id)):
             new_port = l2.LogicalPort(
@@ -340,9 +343,10 @@ class SimpleSwitch13(app_manager.RyuApp):
                 name='logical_port',
                 unique_key=2,
                 version=2,
-                ips=ips,
+                hw_addr=hw_addr,
+                #ips=ips,
                 subnets=None,
-                macs=[mac],
+                macs=macs,
                 binding=self.local_binding,
                 lswitch='{}'.format(dpid),
                 security_groups=['fake_security_group_id1'],

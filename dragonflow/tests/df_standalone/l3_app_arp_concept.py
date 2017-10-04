@@ -119,7 +119,7 @@ class SimpleArp(app_manager.RyuApp):
             srcMac = ROUTER_MACADDR2
             outPort = ROUTER_PORT2
         else:
-            LOG.debug("unknown arp requst received !")
+            LOG.debug("unknown arp request received !")
 
         self.send_arp(datapath, 2, srcMac, srcIp, dstMac, dstIp, outPort)
         LOG.debug("send ARP reply %s => %s (port%d)" % (srcMac, dstMac, outPort))
