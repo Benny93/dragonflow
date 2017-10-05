@@ -66,7 +66,12 @@ class SimpleRouter(app_manager.RyuApp):
 
     nb_api = None
 
+    USE_CACHE = True
+
     cache_datapath_by_dpid={}
+
+    cache_logical_router_by_dpid={}
+    cache_logical_port_by_port_id={}
 
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
@@ -98,13 +103,28 @@ class SimpleRouter(app_manager.RyuApp):
         :param value:
         :param topic:
         """
+        if self.USE_CACHE:
+            # Update cache
+            if action == 'create' or action == 'set':
+                if table == 'lport':
+                    self.cache_logical_port_by_port_id[key] = self.nb_api.get(l2.LogicalPort(id=key))
+                if table == 'lrouter':
+                    self.cache_logical_router_by_dpid[key] = self.nb_api.get(l3.LogicalRouter(id=key))
+            if action == 'del':
+                if table == 'lport':
+                    # default if key does not exists is None
+                    self.cache_logical_port_by_port_id.pop(key, None)
+                if table == 'lrouter':
+                    self.cache_logical_router_by_dpid.pop(key, None)
+
 
         print("L3 App: Received Update for table {} and key {} action {}".format(table, key, action))
         if action == 'set':
             if table == 'lport':
-                #print ("{}".format(value))
-                updated_port = self.nb_api.get(l2.LogicalPort(id=key))
-                lrouters = self.nb_api.get_all(l3.LogicalRouter)
+                if self.USE_CACHE:
+                    updated_port = self.cache_logical_port_by_port_id[key]
+                else:
+                    updated_port = self.nb_api.get(l2.LogicalPort(id=key))
                 dpid = updated_port.lswitch.id
                 if dpid in self.cache_datapath_by_dpid.keys():
                     # Port belongs to datapath under control
@@ -561,7 +581,10 @@ class SimpleRouter(app_manager.RyuApp):
             self.nb_api = api_nb.NbApi.get_instance(False)
 
         dpid = str(dpid)
-        lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
+        if self.USE_CACHE:
+            lrouter = self.cache_logical_router_by_dpid[dpid]
+        else:
+            lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
         for router_port in lrouter.ports:
             if str(router_port.gateway_ip) == gateway_ip:
                 # check all ports of this datapath
@@ -570,6 +593,8 @@ class SimpleRouter(app_manager.RyuApp):
 
     def get_next_hop(self, dpid, dstIP):
         """
+        This is a STUB!
+
         This is static implemented according to the test topology.
         In Future work this information is retrieved via routing protocols
         :param dpid:
@@ -584,40 +609,62 @@ class SimpleRouter(app_manager.RyuApp):
 
         # TODO: THIS IS JUST A STUB: Use Database for this
         dpid = str(dpid)
-        lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
+        if self.USE_CACHE:
+            lrouter = self.cache_logical_router_by_dpid[dpid]
+        else:
+            lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
         if dpid == '1':
             if dstIP == "192.168.34.10":
                 rport = lrouter.ports[1]
-                nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
+                if self.USE_CACHE:
+                    nexthop_router = self.cache_logical_router_by_dpid["2"]
+                else:
+                    nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
                 nh_port = nexthop_router.ports[0]
                 return rport.port_no, rport.mac, nh_port.mac
             elif dstIP == "192.168.33.10":
                 # host mac adress
-                lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 1)))
+                if self.USE_CACHE:
+                    lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 1)]
+                else:
+                    lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 1)))
                 dst_mac = lport.macs[0]
                 rport = lrouter.ports[0]
                 return rport.port_no, rport.mac, dst_mac
+
         elif dpid == '2':
             if dstIP == "192.168.34.10":
                 rport = lrouter.ports[1]  # second port
-                nexthop_router = self.nb_api.get(l3.LogicalRouter(id="3"))
+                if self.USE_CACHE:
+                    nexthop_router = self.cache_logical_router_by_dpid["3"]
+                else:
+                    nexthop_router = self.nb_api.get(l3.LogicalRouter(id="3"))
                 nh_port = nexthop_router.ports[0]
                 return rport.port_no, rport.mac, nh_port.mac
             elif dstIP == "192.168.33.10":
                 rport = lrouter.ports[0]  # first port
-                nexthop_router = self.nb_api.get(l3.LogicalRouter(id="1"))
+                if self.USE_CACHE:
+                    nexthop_router = self.cache_logical_router_by_dpid["1"]
+                else:
+                    nexthop_router = self.nb_api.get(l3.LogicalRouter(id="1"))
                 nh_port = nexthop_router.ports[1]  # second port
                 return rport.port_no, rport.mac, nh_port.mac
         elif dpid == '3':
             if dstIP == "192.168.34.10":
                 # host mac adress
-                lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 2)))
+                if self.USE_CACHE:
+                    lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 2)]
+                else:
+                    lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 2)))
                 dst_mac = lport.macs[0]
                 rport = lrouter.ports[1]  # second port
                 return rport.port_no, rport.mac, dst_mac
             elif dstIP == "192.168.33.10":
                 rport = lrouter.ports[0]
-                nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
+                if self.USE_CACHE:
+                    nexthop_router = self.cache_logical_router_by_dpid["2"]
+                else:
+                    nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
                 nh_port = nexthop_router.ports[1]
                 return rport.port_no, rport.mac, nh_port.mac
         else:
@@ -654,7 +701,10 @@ class SimpleRouter(app_manager.RyuApp):
         if self.nb_api is None:
             self.nb_api = api_nb.NbApi.get_instance(False)
 
-        lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
+        if self.USE_CACHE:
+            lrouter = self.cache_logical_router_by_dpid[datapath.id]
+        else:
+            lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
         for port in lrouter.ports:
             if port.port_no == in_port:
                 return port.mac
@@ -663,8 +713,10 @@ class SimpleRouter(app_manager.RyuApp):
     def get_port_by_ip(self, datapath, dstIp):
         if self.nb_api is None:
             self.nb_api = api_nb.NbApi.get_instance(False)
-
-        lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
+        if self.USE_CACHE:
+            lrouter = self.cache_logical_router_by_dpid[datapath.id]
+        else:
+            lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
         for port in lrouter.ports:
             if self.ip_matches_network(str(port.network), str(dstIp)):
                 return port

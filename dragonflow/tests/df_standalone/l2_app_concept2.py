@@ -46,7 +46,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
     cache_ports_by_datapath_id = {}
 
-    USE_CACHE = False
+    USE_CACHE = True
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
@@ -250,7 +250,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.nb_api.delete(port)
         # Remove switch and ports from cache if cacheing is enabled
         if self.USE_CACHE:
-            del self.cache_ports_by_datapath_id[dpid]
+            self.cache_ports_by_datapath_id.pop(dpid, None)
 
     # DATABASE and CACHE Access
 
