@@ -1,7 +1,7 @@
 import logging
 
 from ryu.base import app_manager
-from ryu.controller import ofp_event
+from ryu.controller import ofp_event, dpset
 from ryu.controller.handler import CONFIG_DISPATCHER
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.controller.handler import set_ev_cls
@@ -26,6 +26,7 @@ from dragonflow.db.models import l3
 from dragonflow.common.exceptions import DBKeyNotFound
 from ryu.topology.api import get_link, get_switch
 from ryu.topology import event, switches
+
 
 LOG = logging.getLogger(__name__)
 # LOG.setLevel(logging.DEBUG)
@@ -59,28 +60,65 @@ SUBNET2 = '192.168.100.0/24'
 SUBNET3 = '192.168.200.0/24'
 SUBNET4 = '192.168.34.0/24'
 
-
-# TODO: Delete Helper classes of original author
-
-class RoutingTable(object):
-    def __init__(self, prefix, destIpAddr, netMask, nextHopIpAddr):
-        self.prefix = prefix
-        self.destIpAddr = destIpAddr
-        self.netMask = netMask
-        self.nextHopIpAddr = nextHopIpAddr
-
-    def get_route(self):
-        return self.prefix, self.nextHopIpAddr
-
-
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+
     nb_api = None
+
+    cache_datapath_by_dpid={}
 
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
         self.ping_q = hub.Queue()
-        self.portInfo = {}
+        #if self.nb_api is None:
+        #    self.nb_api = api_nb.NbApi.get_instance(False)
+            # register callback
+            #self.nb_api.on_db_change.append(self.db_change_callback)
+
+    @set_ev_cls(dpset.EventDP, dpset.DPSET_EV_DISPATCHER)
+    def on_datapath_event(self, ev):
+        if self.nb_api is None:
+            self.nb_api = api_nb.NbApi.get_instance(False)
+        self.nb_api.on_db_change.append(self.db_change_callback)
+
+
+    def db_change_callback(self, table, key, action, value, topic=None):
+        """
+        Called from nb_api on db update.
+
+        Routing:
+        When logicalport is updated with a host ip (this happens while arp request/responses):
+            for all routers
+                install route to this ip
+
+        :param table:
+        :param key:
+        :param action:
+        :param value:
+        :param topic:
+        """
+
+        print("L3 App: Received Update for table {} and key {} action {}".format(table, key, action))
+        if action == 'set':
+            if table == 'lport':
+                #print ("{}".format(value))
+                updated_port = self.nb_api.get(l2.LogicalPort(id=key))
+                lrouters = self.nb_api.get_all(l3.LogicalRouter)
+                dpid = updated_port.lswitch.id
+                if dpid in self.cache_datapath_by_dpid.keys():
+                    # Port belongs to datapath under control
+                    for ip in updated_port.ips:
+                        # install route on every datapath
+                        # only update the other datapaths
+                        out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid, ip)
+                        out_port = updated_port.port_no
+                        datapath = self.cache_datapath_by_dpid[dpid]
+
+                        print "L3 installing flow on {}: out_port: {} src_mac:" \
+                              " {} dst_mac: {}, ip: {}".format(datapath.id, out_port, new_src_mac, new_dst_mac, ip)
+                        self.add_flow_gateway_for_ip(datapath, int(out_port), ip, new_src_mac, new_dst_mac)
+
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -89,6 +127,9 @@ class SimpleRouter(app_manager.RyuApp):
         ofproto = datapath.ofproto
         datapath.id = msg.datapath_id
         ofproto_parser = datapath.ofproto_parser
+
+        #TODO: Cache usage
+        self.cache_datapath_by_dpid[str(datapath.id)] = datapath
 
         set_config = ofproto_parser.OFPSetConfig(
             datapath,
@@ -262,10 +303,19 @@ class SimpleRouter(app_manager.RyuApp):
                       % (send_src_mac, send_dst_mac, send_port))
 
         else:
-            print ("Forward ICMP to matching network")
-            out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid=datapath.id, dstIP=dstIp)
-            self.add_flow_gateway_for_ip(datapath, int(out_port), dstIp, new_src_mac, new_dst_mac)
-            # self.add_flow_gateway(datapath,ether.ETH_TYPE_IP, new_src_mac,new_dst_mac,int(out_port),dstIp)
+            # if in own net.
+            matching_port = self.get_port_by_ip(datapath, dstIp)
+            if matching_port:
+                # send ARP request opcode =1
+                # A flow rule is created when receiving the arp reply from client
+                # self.send_arp(datapath, 1, matching_port.mac, str(matching_port.gateway_ip), "00:00:00:00:00:00", dstIp,
+                #               int(matching_port.port_no))
+                pass
+            else:
+                print ("Forward ICMP to matching network")
+                out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid=datapath.id, dstIP=dstIp)
+                self.add_flow_gateway_for_ip(datapath, int(out_port), dstIp, new_src_mac, new_dst_mac)
+                # self.add_flow_gateway(datapath,ether.ETH_TYPE_IP, new_src_mac,new_dst_mac,int(out_port),dstIp)
 
         return 0
 
@@ -290,8 +340,14 @@ class SimpleRouter(app_manager.RyuApp):
         if arpPacket.opcode == 1:
             self.reply_arp(datapath, etherFrame, arpPacket, arp_dstIp, inPort)
         elif arpPacket.opcode == 2:
-            # self.arpInfo[inPort] = ArpTable(hostIpAddr, hostMacAddr, inPort)
-            # TODO: Store this info in db
+            # ARP Response from Host
+            # Old: self.arpInfo[inPort] = ArpTable(hostIpAddr, hostMacAddr, inPort)
+            # New: Create Flow rule that sends packets to the dstIP with matching mac adress pair
+            # TODO: Can be removed. Host data is learned on ARP request
+            # mac__of_router_port = self.get_hwaddr_of_router_port(datapath, inPort)
+            # self.add_flow_gateway_for_ip(datapath, out_port=inPort, dst_ip=hostIpAddr, new_src_mac=mac__of_router_port,
+            #                             new_dst_mac=hostMacAddr)
+
             return 0
         return 0
 
@@ -314,6 +370,10 @@ class SimpleRouter(app_manager.RyuApp):
             srcMac = router_port.mac
 
             self.send_arp(datapath, 2, srcMac, srcIp, dstMac, dstIp, outPort)
+            # Create Rule from host knowledge
+            self.add_flow_gateway_for_ip(datapath, out_port=inPort, dst_ip=dstIp, new_src_mac=srcMac,
+                                         new_dst_mac=dstMac)
+
             print("send ARP reply %s => %s (port%d)" % (srcMac, dstMac, outPort))
             return 0
         else:
@@ -396,91 +456,13 @@ class SimpleRouter(app_manager.RyuApp):
 
         self.add_flow(datapath, 1, match, actions)
 
-    #TODO: Delete this function
-    def add_flow_gateway(self, datapath, ethertype, mod_src_mac, mod_dst_mac, out_port, default_gateway):
-        """
-         Gateway method by original author
-         Something seems to be missing, since this match matches all ip packets to one port
-        :param datapath:
-        :param ethertype:
-        :param mod_src_mac:
-        :param mod_dst_mac:
-        :param out_port:
-        :param default_gateway: The ip address of the next hop
-        :return:
-        """
-        ipaddress = IPNetwork("0.0.0.0" + '/' + "0.0.0.0")
-        prefix = str(ipaddress.cidr)
-        LOG.debug("add RoutingInfo(gateway) for %s" % prefix)
-        # self.routingInfo[prefix] = RoutingTable(prefix, "0.0.0.0", "0.0.0.0", default_gateway)
-        match = datapath.ofproto_parser.OFPMatch(eth_type=ethertype)
-        actions = [datapath.ofproto_parser.OFPActionSetField(eth_src=mod_src_mac),
-                   datapath.ofproto_parser.OFPActionSetField(eth_dst=mod_dst_mac),
-                   datapath.ofproto_parser.OFPActionOutput(out_port, 0),
-                   datapath.ofproto_parser.OFPActionDecNwTtl()]
-        inst = [datapath.ofproto_parser.OFPInstructionActions(
-            datapath.ofproto.OFPIT_APPLY_ACTIONS, actions)]
-        mod = datapath.ofproto_parser.OFPFlowMod(
-            cookie=0,
-            cookie_mask=0,
-            table_id=0,
-            command=datapath.ofproto.OFPFC_ADD,
-            datapath=datapath,
-            idle_timeout=0,
-            hard_timeout=0,
-            priority=0x1,
-            buffer_id=0xffffffff,
-            out_port=datapath.ofproto.OFPP_ANY,
-            out_group=datapath.ofproto.OFPG_ANY,
-            match=match,
-            instructions=inst)
-        datapath.send_msg(mod)
-        return 0
 
-    def print_etherFrame(self, etherFrame):
-        print("---------------------------------------")
-        print("eth_dst_address :%s" % etherFrame.dst)
-        print("eth_src_address :%s" % etherFrame.src)
-        print("eth_ethertype :0x%04x" % etherFrame.ethertype)
-        print("---------------------------------------")
 
-    def print_arpPacket(self, arpPacket):
-        print("arp_hwtype :%d" % arpPacket.hwtype)
-        print("arp_proto :0x%04x" % arpPacket.proto)
-        print("arp_hlen :%d" % arpPacket.hlen)
-        print("arp_plen :%d" % arpPacket.plen)
-        print("arp_opcode :%d" % arpPacket.opcode)
-        print("arp_src_mac :%s" % arpPacket.src_mac)
-        print("arp_src_ip :%s" % arpPacket.src_ip)
-        print("arp_dst_mac :%s" % arpPacket.dst_mac)
-        print("arp_dst_ip :%s" % arpPacket.dst_ip)
-        print("---------------------------------------")
 
-    def print_ipPacket(self, ipPacket):
-        print("ip_version :%d" % ipPacket.version)
-        print("ip_header_length :%d" % ipPacket.header_length)
-        print("ip_tos :%d" % ipPacket.tos)
-        print("ip_total_length :%d" % ipPacket.total_length)
-        print("ip_identification:%d" % ipPacket.identification)
-        print("ip_flags :%d" % ipPacket.flags)
-        print("ip_offset :%d" % ipPacket.offset)
-        print("ip_ttl :%d" % ipPacket.ttl)
-        print("ip_proto :%d" % ipPacket.proto)
-        print("ip_csum :%d" % ipPacket.csum)
-        print("ip_src :%s" % ipPacket.src)
-        print("ip_dst :%s" % ipPacket.dst)
-        print("---------------------------------------")
-
-    def print_icmp(self, icmpPacket):
-        print("icmp_type :%d", icmpPacket.type)
-        print("icmp_code :%d", icmpPacket.code)
-        print("icmp_csum :%d", icmpPacket.csum)
-        print("icmp_id :%d", icmpPacket.data.id)
-        print("icmp_seq :%d", icmpPacket.data.seq)
-        print("icmp_data :%s", icmpPacket.data.data)
 
     # Database Access
-    #TODO: Provide cache option for faster responses.
+
+    # TODO: Provide cache option for faster responses.
 
     @set_ev_cls(event.EventSwitchEnter)
     def get_topology_data(self, ev):
@@ -575,6 +557,9 @@ class SimpleRouter(app_manager.RyuApp):
         :param gateway_ip:
         :return:
         """
+        if self.nb_api is None:
+            self.nb_api = api_nb.NbApi.get_instance(False)
+
         dpid = str(dpid)
         lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
         for router_port in lrouter.ports:
@@ -591,6 +576,12 @@ class SimpleRouter(app_manager.RyuApp):
         :param dstIP:
         :return: port number, new src mac, new dst mac
         """
+
+        if self.nb_api is None:
+            self.nb_api = api_nb.NbApi.get_instance(False)
+
+        dstIP = str(dstIP)
+
         # TODO: THIS IS JUST A STUB: Use Database for this
         dpid = str(dpid)
         lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
@@ -658,3 +649,83 @@ class SimpleRouter(app_manager.RyuApp):
         except DBKeyNotFound:
             # TODO: Create Port?
             print "Key not Found!!"
+
+    def get_hwaddr_of_router_port(self, datapath, in_port):
+        if self.nb_api is None:
+            self.nb_api = api_nb.NbApi.get_instance(False)
+
+        lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
+        for port in lrouter.ports:
+            if port.port_no == in_port:
+                return port.mac
+        return None
+
+    def get_port_by_ip(self, datapath, dstIp):
+        if self.nb_api is None:
+            self.nb_api = api_nb.NbApi.get_instance(False)
+
+        lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
+        for port in lrouter.ports:
+            if self.ip_matches_network(str(port.network), str(dstIp)):
+                return port
+
+    def ip_matches_network(self, network, ip):
+        """
+
+        '{:08b}'.format(254): Converts 254 in a string of its binary representation
+
+        ip_bits[:net_mask] == net_ip_bits[:net_mask]: compare the ip bit streams
+
+        :param network: string like '192.168.33.0/24'
+        :param ip: string like '192.168.33.1'
+        :return: if ip matches network
+        """
+        net_ip, net_mask = network.split('/')
+        net_mask = int(net_mask)
+        ip_bits = ''.join('{:08b}'.format(int(x)) for x in ip.split('.'))
+        net_ip_bits = ''.join('{:08b}'.format(int(x)) for x in net_ip.split('.'))
+
+        return ip_bits[:net_mask] == net_ip_bits[:net_mask]
+
+    # Printing of packets
+    def print_etherFrame(self, etherFrame):
+        print("---------------------------------------")
+        print("eth_dst_address :%s" % etherFrame.dst)
+        print("eth_src_address :%s" % etherFrame.src)
+        print("eth_ethertype :0x%04x" % etherFrame.ethertype)
+        print("---------------------------------------")
+
+    def print_arpPacket(self, arpPacket):
+        print("arp_hwtype :%d" % arpPacket.hwtype)
+        print("arp_proto :0x%04x" % arpPacket.proto)
+        print("arp_hlen :%d" % arpPacket.hlen)
+        print("arp_plen :%d" % arpPacket.plen)
+        print("arp_opcode :%d" % arpPacket.opcode)
+        print("arp_src_mac :%s" % arpPacket.src_mac)
+        print("arp_src_ip :%s" % arpPacket.src_ip)
+        print("arp_dst_mac :%s" % arpPacket.dst_mac)
+        print("arp_dst_ip :%s" % arpPacket.dst_ip)
+        print("---------------------------------------")
+
+    def print_ipPacket(self, ipPacket):
+        print("ip_version :%d" % ipPacket.version)
+        print("ip_header_length :%d" % ipPacket.header_length)
+        print("ip_tos :%d" % ipPacket.tos)
+        print("ip_total_length :%d" % ipPacket.total_length)
+        print("ip_identification:%d" % ipPacket.identification)
+        print("ip_flags :%d" % ipPacket.flags)
+        print("ip_offset :%d" % ipPacket.offset)
+        print("ip_ttl :%d" % ipPacket.ttl)
+        print("ip_proto :%d" % ipPacket.proto)
+        print("ip_csum :%d" % ipPacket.csum)
+        print("ip_src :%s" % ipPacket.src)
+        print("ip_dst :%s" % ipPacket.dst)
+        print("---------------------------------------")
+
+    def print_icmp(self, icmpPacket):
+        print("icmp_type :%d", icmpPacket.type)
+        print("icmp_code :%d", icmpPacket.code)
+        print("icmp_csum :%d", icmpPacket.csum)
+        print("icmp_id :%d", icmpPacket.data.id)
+        print("icmp_seq :%d", icmpPacket.data.seq)
+        print("icmp_data :%s", icmpPacket.data.data)

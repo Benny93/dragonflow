@@ -41,7 +41,7 @@ def _get_topic(obj):
 
 
 class NbApi(object):
-    on_db_change = None
+    on_db_change = []
 
     def __init__(self, db_driver, use_pubsub=False, is_neutron_server=False):
         super(NbApi, self).__init__()
@@ -179,18 +179,29 @@ class NbApi(object):
 
     def db_change_callback(self, table, key, action, value, topic=None):
         update = db_common.DbUpdate(table, key, action, value, topic=topic)
-        LOG.debug("Pushing Update to Queue: %s", update)
-        self._queue.put(update)
-        if not self.on_db_change is None:
-            self.on_db_change(table, key, action, value, topic=topic)
+        print "Pushing Update to Queue: {}".format(update)
+        #self._queue.put(update)
         time.sleep(0)
+        # TODO: This is a temporary fix until DF cache is ported to standalone version
+        if self.on_db_change is not None:
+            for callback in self.on_db_change:
+                callback(table, key, action,
+                         value, topic=topic)
+
 
     def process_changes(self):
-        while True:
+        #while True:
+        while self._queue.qsize() is not 0:
             next_update = self._queue.get(block=True)
             LOG.debug("Event update: %s", next_update)
-            self._notification_cb(next_update)
+            #self._notification_cb(next_update)
             self._queue.task_done()
+            # # TODO: This is a temporary fix until DF cache is ported to standalone version
+            # if self.on_db_change is not None:
+            #     for callback in self.on_db_change:
+            #         callback(next_update.table, next_update.key, next_update.action,
+            #                  next_update.value, topic=next_update.topic)
+
 
     def create(self, obj, skip_send_event=False):
         """Create the provided object in the database and publish an event

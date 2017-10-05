@@ -1,6 +1,10 @@
 #!/usr/env/python
+
 import sys
+
+from dragonflow import conf as cfg
 from ryu.cmd import manager
+from dragonflow.neutron.common import config as common_config
 
 def main():
     # if len(sys.argv) > 1:
@@ -29,15 +33,25 @@ def main():
     # sys.argv.append('/home/vagrant/dragonflow/dragonflow/controller/apps/l2.py')
     sys.argv.append('--verbose')
     sys.argv.append('--observe-links')
+
+
+    common_config.init(sys.argv[1:3])
+    common_config.setup_logging()
+
     if port is not "":
         print "Setting Port {}".format(port)
         sys.argv.append('--ofp-tcp-listen-port')
         sys.argv.append(port)
+        #TODO: Temp fix for zero mq colission on same machine
+        publisher_port = int(port)+3000
+        #publisher_port = 9000
+        cfg.CONF.set_override('publisher_port', publisher_port, group='df')
 
     # ipv6 listen host
     # sys.argv.append('--ofp-listen-host')
     # sys.argv.append('::')
     # sys.argv.append('--enable-debugger')
+
     manager.main()
 
 

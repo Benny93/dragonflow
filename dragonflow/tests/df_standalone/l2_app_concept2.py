@@ -60,15 +60,17 @@ class SimpleSwitch13(app_manager.RyuApp):
                                                        cidr="192.168.123.0/24",
                                                        id="fake_subnet1")]
         print (self.fake_lswitch_default_subnets[0].dhcp_ip)
-        common_config.init(sys.argv[1:3])
-        common_config.setup_logging()
+
+        #common_config.init(sys.argv[1:3])
+        #common_config.setup_logging()
         self.nb_api = api_nb.NbApi.get_instance(False)
 
         self.controller = controller_concept.DfStandaloneController(
             'df_standalone', self.nb_api)
         self.db_store = db_store.get_instance()
         self.controller.on_datapath_set()
-        self.nb_api.on_db_change = self.db_change_callback
+
+        self.nb_api.on_db_change.append(self.db_change_callback)
 
         if self.USE_CACHE:
             # learn from db
@@ -93,7 +95,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         :param value:
         :param topic:
         """
-        print("Received Update for table {} and key {} action {}".format(table, key, action))
+        print("L2 App: Received Update for table {} and key {} action {}".format(table, key, action))
         # These updates are only required if data is cached locally
         if self.USE_CACHE:
             if table == 'lport' and (action == 'create' or action == 'update'):
@@ -244,7 +246,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.nb_api.delete(db_switch)
         lports = self.nb_api.get_all(l2.LogicalPort)
         for port in lports:
-            if port.lswitch.id == dpid:
+            if str(port.lswitch.id) == dpid:
                 self.nb_api.delete(port)
         # Remove switch and ports from cache if cacheing is enabled
         if self.USE_CACHE:
