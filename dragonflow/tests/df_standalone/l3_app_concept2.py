@@ -65,12 +65,14 @@ class SimpleRouter(app_manager.RyuApp):
 
     nb_api = None
 
-    USE_CACHE = False
+    USE_CACHE = True
 
     cache_datapath_by_dpid = {}
 
     cache_logical_router_by_dpid = {}
     cache_logical_port_by_port_id = {}
+
+    startup = True
 
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
@@ -82,9 +84,29 @@ class SimpleRouter(app_manager.RyuApp):
 
     @set_ev_cls(dpset.EventDP, dpset.DPSET_EV_DISPATCHER)
     def on_datapath_event(self, ev):
-        if self.nb_api is None:
-            self.nb_api = api_nb.NbApi.get_instance(False)
-        self.nb_api.on_db_change.append(self.db_change_callback)
+        if self.startup:
+            # First switch connection event_ Controller startup entry point
+            if self.nb_api is None:
+                self.nb_api = api_nb.NbApi.get_instance(False)
+            self.nb_api.on_db_change.append(self.db_change_callback)
+
+            if self.USE_CACHE:
+                self.sync_with_database()
+            self.startup = False
+
+    def sync_with_database(self):
+        """
+        After controller start/restart synchronize cache with db
+        :return:
+        """
+        # learn from db
+        lports = self.nb_api.get_all(l2.LogicalPort)
+        for lport in lports:
+            port_id = "{}:{}".format(lport.lswitch.id, lport.id)
+            self.cache_logical_port_by_port_id[port_id] = lport
+        lrouters = self.nb_api.get_all(l3.LogicalRouter)
+        for lrouter in lrouters:
+            self.cache_logical_router_by_dpid[lrouter.id] = lrouter
 
     def db_change_callback(self, table, key, action, value, topic=None):
         """
@@ -588,7 +610,7 @@ class SimpleRouter(app_manager.RyuApp):
             self.nb_api = api_nb.NbApi.get_instance(False)
 
         dpid = str(dpid)
-        if self.USE_CACHE:
+        if self.USE_CACHE and dpid in self.cache_logical_router_by_dpid.keys():
             lrouter = self.cache_logical_router_by_dpid[dpid]
         else:
             lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
@@ -616,7 +638,7 @@ class SimpleRouter(app_manager.RyuApp):
 
         # TODO: THIS IS JUST A STUB: Use Database for this
         dpid = str(dpid)
-        if self.USE_CACHE:
+        if self.USE_CACHE and dpid in self.cache_logical_router_by_dpid.keys():
             lrouter = self.cache_logical_router_by_dpid[dpid]
         else:
             lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
@@ -631,15 +653,7 @@ class SimpleRouter(app_manager.RyuApp):
                 return rport.port_no, rport.mac, nh_port.mac
             else:
                 # network is directly connected to switch
-                # Will be learned during arp request.
-
-                # if self.USE_CACHE:
-                #     lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 1)]
-                # else:
-                #     lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 1)))
-                # dst_mac = lport.macs[0]
-                # rport = lrouter.ports[0]
-                # return rport.port_no, rport.mac, dst_mac
+                # host mac is learned during arp request.
                 return None, None, None
 
         elif dpid == '2':
@@ -671,15 +685,7 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 # host mac adress
                 # Learned by ARP
-                # if self.USE_CACHE:
-                #     lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 2)]
-                # else:
-                #     lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 2)))
-                # dst_mac = lport.macs[0]
-                # rport = lrouter.ports[1]  # second port
-                # return rport.port_no, rport.mac, dst_mac
                 return None, None, None
-
         else:
             print "Datapath {} not supported. Cannot return nexthop information!"
             return None, None, None
@@ -714,7 +720,7 @@ class SimpleRouter(app_manager.RyuApp):
         if self.nb_api is None:
             self.nb_api = api_nb.NbApi.get_instance(False)
 
-        if self.USE_CACHE:
+        if self.USE_CACHE and datapath.id in self.cache_logical_router_by_dpid.keys():
             lrouter = self.cache_logical_router_by_dpid[datapath.id]
         else:
             lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
@@ -726,7 +732,7 @@ class SimpleRouter(app_manager.RyuApp):
     def get_port_by_ip(self, datapath, dstIp):
         if self.nb_api is None:
             self.nb_api = api_nb.NbApi.get_instance(False)
-        if self.USE_CACHE:
+        if self.USE_CACHE and datapath.id in self.cache_logical_router_by_dpid.keys():
             lrouter = self.cache_logical_router_by_dpid[datapath.id]
         else:
             lrouter = self.nb_api.get(l3.LogicalRouter(id=str(datapath.id)))
@@ -749,7 +755,7 @@ class SimpleRouter(app_manager.RyuApp):
         net_mask = int(net_mask)
         ip_bits = ''.join('{:08b}'.format(int(x)) for x in ip.split('.'))
         net_ip_bits = ''.join('{:08b}'.format(int(x)) for x in net_ip.split('.'))
-
+        # example: net_mask=24 -> compare strings at position 0 to 23
         return ip_bits[:net_mask] == net_ip_bits[:net_mask]
 
     # Printing of packets

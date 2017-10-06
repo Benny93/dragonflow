@@ -43,7 +43,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         type=l2.BINDING_CHASSIS,
         chassis=chassis,
     )
-
+    # This cache will be shared with other apps in future development
     cache_ports_by_datapath_id = {}
 
     USE_CACHE = True
@@ -73,17 +73,24 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.nb_api.on_db_change.append(self.db_change_callback)
 
         if self.USE_CACHE:
-            # learn from db
-            lports = self.nb_api.get_all(l2.LogicalPort)
-            lswitches = self.nb_api.get_all(l2.LogicalSwitch)
-            for lswitch in lswitches:
-                dpid = "{}".format(lswitch.id)
-                for lport in lports:
-                    if lport.lswitch.id == dpid:
-                        self.cache_ports_by_datapath_id.setdefault(dpid, {})
-                        self.cache_ports_by_datapath_id[dpid][lport.id] = lport
-                        # TODO Controller name as topic???
-                        # self.controller.register_topic("fake_tenant1")
+            self.sync_with_database()
+
+    def sync_with_database(self):
+        """
+        After controller start/restart synchronize cache with db
+        :return:
+        """
+        # learn from db
+        lports = self.nb_api.get_all(l2.LogicalPort)
+        lswitches = self.nb_api.get_all(l2.LogicalSwitch)
+        for lswitch in lswitches:
+            dpid = "{}".format(lswitch.id)
+            for lport in lports:
+                if lport.lswitch.id == dpid:
+                    self.cache_ports_by_datapath_id.setdefault(dpid, {})
+                    self.cache_ports_by_datapath_id[dpid][lport.id] = lport
+                    # TODO Controller name as topic
+                    # self.controller.register_topic("fake_tenant1")
 
     def db_change_callback(self, table, key, action, value, topic=None):
         """
