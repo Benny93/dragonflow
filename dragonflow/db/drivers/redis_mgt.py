@@ -173,6 +173,16 @@ class RedisMgt(object):
             status, slots = self._parse_node_line(line)
             role = flags
 
+            # TODO: Remove this
+            # FIX for work with docker redis cluster
+            # cluster nodes returns docker container ip
+            # This ip is not reachable from remote host
+            # Replacing containter IP with host ip
+            default_ip_port = self.redisMgt.keys()[0]
+            _, port = ip_port.split(':')
+            ip_default, _ = default_ip_port.split(':')
+            ip_port = "{}:{}".format(ip_default, port)
+
             if ',' in flags:
                 if "fail" in flags:
                     continue

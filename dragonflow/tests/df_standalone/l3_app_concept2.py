@@ -27,7 +27,6 @@ from dragonflow.common.exceptions import DBKeyNotFound
 from ryu.topology.api import get_link, get_switch
 from ryu.topology import event, switches
 
-
 LOG = logging.getLogger(__name__)
 # LOG.setLevel(logging.DEBUG)
 logging.basicConfig()
@@ -60,33 +59,32 @@ SUBNET2 = '192.168.100.0/24'
 SUBNET3 = '192.168.200.0/24'
 SUBNET4 = '192.168.34.0/24'
 
+
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
-
     nb_api = None
 
-    USE_CACHE = True
+    USE_CACHE = False
 
-    cache_datapath_by_dpid={}
+    cache_datapath_by_dpid = {}
 
-    cache_logical_router_by_dpid={}
-    cache_logical_port_by_port_id={}
+    cache_logical_router_by_dpid = {}
+    cache_logical_port_by_port_id = {}
 
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
         self.ping_q = hub.Queue()
-        #if self.nb_api is None:
+        # if self.nb_api is None:
         #    self.nb_api = api_nb.NbApi.get_instance(False)
-            # register callback
-            #self.nb_api.on_db_change.append(self.db_change_callback)
+        # register callback
+        # self.nb_api.on_db_change.append(self.db_change_callback)
 
     @set_ev_cls(dpset.EventDP, dpset.DPSET_EV_DISPATCHER)
     def on_datapath_event(self, ev):
         if self.nb_api is None:
             self.nb_api = api_nb.NbApi.get_instance(False)
         self.nb_api.on_db_change.append(self.db_change_callback)
-
 
     def db_change_callback(self, table, key, action, value, topic=None):
         """
@@ -117,7 +115,6 @@ class SimpleRouter(app_manager.RyuApp):
                 if table == 'lrouter':
                     self.cache_logical_router_by_dpid.pop(key, None)
 
-
         print("L3 App: Received Update for table {} and key {} action {}".format(table, key, action))
         if action == 'set':
             if table == 'lport':
@@ -125,20 +122,27 @@ class SimpleRouter(app_manager.RyuApp):
                     updated_port = self.cache_logical_port_by_port_id[key]
                 else:
                     updated_port = self.nb_api.get(l2.LogicalPort(id=key))
-                dpid = updated_port.lswitch.id
-                if dpid in self.cache_datapath_by_dpid.keys():
-                    # Port belongs to datapath under control
+
+                if len(updated_port.ips) is not 0:
                     for ip in updated_port.ips:
+                        # new ip discovered
                         # install route on every datapath
                         # only update the other datapaths
-                        out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid, ip)
-                        out_port = updated_port.port_no
-                        datapath = self.cache_datapath_by_dpid[dpid]
-
-                        print "L3 installing flow on {}: out_port: {} src_mac:" \
-                              " {} dst_mac: {}, ip: {}".format(datapath.id, out_port, new_src_mac, new_dst_mac, ip)
-                        self.add_flow_gateway_for_ip(datapath, int(out_port), ip, new_src_mac, new_dst_mac)
-
+                        for dpid, datapath in self.cache_datapath_by_dpid.iteritems():
+                            out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid, ip)
+                            if out_port is None:
+                                continue
+                            out_port_id = "{}:{}".format(dpid, out_port)
+                            lout_port = self.nb_api.get(l2.LogicalPort(id=out_port_id))
+                            if ip in lout_port.ips:
+                                continue
+                            # else add new ip and install flow
+                            lout_port.ips.append(ip)
+                            self.nb_api.update(lout_port)
+                            # install flow
+                            print "L3 IP via pubsub: installing flow on {}: out_port: {} src_mac:" \
+                                  " {} dst_mac: {}, ip: {}".format(datapath.id, out_port, new_src_mac, new_dst_mac, ip)
+                            self.add_flow_gateway_for_ip(datapath, int(out_port), ip, new_src_mac, new_dst_mac)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -148,7 +152,10 @@ class SimpleRouter(app_manager.RyuApp):
         datapath.id = msg.datapath_id
         ofproto_parser = datapath.ofproto_parser
 
-        #TODO: Cache usage
+        if datapath.id == 2:
+            self.add_flow_drop_arp(datapath)
+
+        # TODO: Cache usage
         self.cache_datapath_by_dpid[str(datapath.id)] = datapath
 
         set_config = ofproto_parser.OFPSetConfig(
@@ -476,10 +483,6 @@ class SimpleRouter(app_manager.RyuApp):
 
         self.add_flow(datapath, 1, match, actions)
 
-
-
-
-
     # Database Access
 
     # TODO: Provide cache option for faster responses.
@@ -781,3 +784,31 @@ class SimpleRouter(app_manager.RyuApp):
         print("icmp_id :%d", icmpPacket.data.id)
         print("icmp_seq :%d", icmpPacket.data.seq)
         print("icmp_data :%s", icmpPacket.data.data)
+
+    def add_flow_drop_arp(self, datapath):
+        """
+        This is used for the testing scenario to keep arp
+        request from reaching the other networks beyond switch 2
+
+        Dropping at the switch by clearing all actions (including the table
+        miss action) from the flow.
+        :param datapath:
+        :return:
+        """
+        proto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        # eth_type arp : 0x0806
+        match = parser.OFPMatch(eth_type=0x0806, )
+
+        instruction = [
+            parser.OFPInstructionActions(proto.OFPIT_CLEAR_ACTIONS, [])
+        ]
+
+        msg = parser.OFPFlowMod(datapath,
+                                # table_id=OFDPA_FLOW_TABLE_ID_ACL_POLICY,
+                                priority=1,
+                                command=proto.OFPFC_ADD,
+                                match=match,
+                                instructions=instruction
+                                )
+        datapath.send_msg(msg)

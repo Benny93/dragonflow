@@ -17,10 +17,10 @@ def main():
     #     else:
     #         print "unkown option {}".format(option)
     #         exit(1)
-    try:
-        port = str(input("Specify controller port. Empty is default\nController listens to Port:"))
-    except Exception:
-        port = ""
+    # try:
+    #     port = str(input("Specify controller port. Empty is default\nController listens to Port:"))
+    # except Exception:
+    #     port = ""
 
     #sys.argv.append('--config-file')
     #sys.argv.append('/home/vagrant/dragonflow/etc/neutron.conf')
@@ -38,14 +38,11 @@ def main():
     common_config.init(sys.argv[1:3])
     common_config.setup_logging()
 
-    if port is not "":
-        print "Setting Port {}".format(port)
-        sys.argv.append('--ofp-tcp-listen-port')
-        sys.argv.append(port)
-        #TODO: Temp fix for zero mq colission on same machine
-        publisher_port = int(port)+3000
-        #publisher_port = 9000
-        cfg.CONF.set_override('publisher_port', publisher_port, group='df')
+    # if port is not "":
+    #     print "Setting Port {}".format(port)
+    #     sys.argv.append('--ofp-tcp-listen-port')
+    #     sys.argv.append(port)
+
 
     # ipv6 listen host
     # sys.argv.append('--ofp-listen-host')

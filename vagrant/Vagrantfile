@@ -97,6 +97,24 @@ Vagrant.configure("2") do |config|
     #               end
     #               end
 
+    config.vm.define "controller" do |controller|
+        controller.vm.host_name = vagrant_config['controller']['host_name']
+        controller.vm.network "private_network",
+            ip: vagrant_config['controller']['ip'],
+            netmask: vagrant_config['controller']['netmask']
+        controller.vm.provision "shell", path: "provisioning/setup-base.sh", privileged: true
+        config.vm.provision "file", source: "provisioning/.zshrc", destination: ".zshrc"
+        config.vm.provision "file", source: "provisioning/fix_encoding.py", destination: "/home/vagrant/fix_encoding.py"
+        controller.vm.provision "shell", path: "provisioning/setup-controller.sh", privileged: false
+#        controller.vm.provision "shell", path: "provisioning/setup-controller-net.sh", privileged: true, run: 'always'
+        # install docker. Reuse script to launch replikas
+        controller.vm.provision "shell", path: "provisioning/install_redis_replica.sh", privileged: true
+        # only virtualbox support
+        config.vm.provider "virtualbox" do |vb|
+            vb.memory = vagrant_config['controller']['memory']
+            vb.cpus = vagrant_config['controller']['cpus']
+        end
+    end
     config.vm.define "controller1" do |controller1|
         controller1.vm.host_name = vagrant_config['controller1']['host_name']
         controller1.vm.network "private_network",
@@ -106,7 +124,7 @@ Vagrant.configure("2") do |config|
         config.vm.provision "file", source: "provisioning/.zshrc", destination: ".zshrc"
         config.vm.provision "file", source: "provisioning/fix_encoding.py", destination: "/home/vagrant/fix_encoding.py"
         controller1.vm.provision "shell", path: "provisioning/setup-controller.sh", privileged: false
-        controller1.vm.provision "shell", path: "provisioning/setup-controller-net.sh", privileged: true, run: 'always'
+#        controller1.vm.provision "shell", path: "provisioning/setup-controller-net.sh", privileged: true, run: 'always'
         # install docker. Reuse script to launch replikas
         controller1.vm.provision "shell", path: "provisioning/install_redis_replica.sh", privileged: true
         # only virtualbox support
@@ -146,7 +164,7 @@ Vagrant.configure("2") do |config|
             netmask: vagrant_config['switch1']['netmask']
         switch1.vm.provision "shell", path: "provisioning/setup-base.sh", privileged: true
         config.vm.provision "file", source: "provisioning/.zshrc", destination: ".zshrc"
-        switch1.vm.provision "shell", path: "provisioning/setup-switch-net.sh", privileged: true, run: 'always'
+       # switch1.vm.provision "shell", path: "provisioning/setup-switch-net.sh", privileged: true, run: 'always'
         # only virtualbox support 
         config.vm.provider "virtualbox" do |vb|
             vb.memory = vagrant_config['switch1']['memory']
