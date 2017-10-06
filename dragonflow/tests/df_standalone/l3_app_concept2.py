@@ -341,8 +341,9 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 print ("Forward ICMP to matching network")
                 out_port, new_src_mac, new_dst_mac = self.get_next_hop(dpid=datapath.id, dstIP=dstIp)
-                self.add_flow_gateway_for_ip(datapath, int(out_port), dstIp, new_src_mac, new_dst_mac)
-                # self.add_flow_gateway(datapath,ether.ETH_TYPE_IP, new_src_mac,new_dst_mac,int(out_port),dstIp)
+                if out_port and new_dst_mac and new_dst_mac:
+                    self.add_flow_gateway_for_ip(datapath, int(out_port), dstIp, new_src_mac, new_dst_mac)
+                    # self.add_flow_gateway(datapath,ether.ETH_TYPE_IP, new_src_mac,new_dst_mac,int(out_port),dstIp)
 
         return 0
 
@@ -397,6 +398,9 @@ class SimpleRouter(app_manager.RyuApp):
             srcMac = router_port.mac
 
             self.send_arp(datapath, 2, srcMac, srcIp, dstMac, dstIp, outPort)
+
+            print "L3 ARP Request received: installing flow on {}: out_port: {} src_mac:" \
+                  " {} dst_mac: {}, ip: {}".format(datapath.id, inPort, srcMac, dstMac, dstIp)
             # Create Rule from host knowledge
             self.add_flow_gateway_for_ip(datapath, out_port=inPort, dst_ip=dstIp, new_src_mac=srcMac,
                                          new_dst_mac=dstMac)
@@ -617,7 +621,7 @@ class SimpleRouter(app_manager.RyuApp):
         else:
             lrouter = self.nb_api.get(l3.LogicalRouter(id=dpid))
         if dpid == '1':
-            if dstIP == "192.168.34.10":
+            if not self.ip_matches_network(SUBNET1, dstIP) and not self.ip_matches_network(SUBNET2, dstIP):
                 rport = lrouter.ports[1]
                 if self.USE_CACHE:
                     nexthop_router = self.cache_logical_router_by_dpid["2"]
@@ -625,18 +629,21 @@ class SimpleRouter(app_manager.RyuApp):
                     nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
                 nh_port = nexthop_router.ports[0]
                 return rport.port_no, rport.mac, nh_port.mac
-            elif dstIP == "192.168.33.10":
-                # host mac adress
-                if self.USE_CACHE:
-                    lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 1)]
-                else:
-                    lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 1)))
-                dst_mac = lport.macs[0]
-                rport = lrouter.ports[0]
-                return rport.port_no, rport.mac, dst_mac
+            else:
+                # network is directly connected to switch
+                # Will be learned during arp request.
+
+                # if self.USE_CACHE:
+                #     lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 1)]
+                # else:
+                #     lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 1)))
+                # dst_mac = lport.macs[0]
+                # rport = lrouter.ports[0]
+                # return rport.port_no, rport.mac, dst_mac
+                return None, None, None
 
         elif dpid == '2':
-            if dstIP == "192.168.34.10":
+            if self.ip_matches_network(SUBNET3, dstIP) or self.ip_matches_network(SUBNET4, dstIP):
                 rport = lrouter.ports[1]  # second port
                 if self.USE_CACHE:
                     nexthop_router = self.cache_logical_router_by_dpid["3"]
@@ -644,7 +651,7 @@ class SimpleRouter(app_manager.RyuApp):
                     nexthop_router = self.nb_api.get(l3.LogicalRouter(id="3"))
                 nh_port = nexthop_router.ports[0]
                 return rport.port_no, rport.mac, nh_port.mac
-            elif dstIP == "192.168.33.10":
+            elif self.ip_matches_network(SUBNET1, dstIP) or self.ip_matches_network(SUBNET2, dstIP):
                 rport = lrouter.ports[0]  # first port
                 if self.USE_CACHE:
                     nexthop_router = self.cache_logical_router_by_dpid["1"]
@@ -653,16 +660,7 @@ class SimpleRouter(app_manager.RyuApp):
                 nh_port = nexthop_router.ports[1]  # second port
                 return rport.port_no, rport.mac, nh_port.mac
         elif dpid == '3':
-            if dstIP == "192.168.34.10":
-                # host mac adress
-                if self.USE_CACHE:
-                    lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 2)]
-                else:
-                    lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 2)))
-                dst_mac = lport.macs[0]
-                rport = lrouter.ports[1]  # second port
-                return rport.port_no, rport.mac, dst_mac
-            elif dstIP == "192.168.33.10":
+            if not self.ip_matches_network(SUBNET3, dstIP) and not self.ip_matches_network(SUBNET4, dstIP):
                 rport = lrouter.ports[0]
                 if self.USE_CACHE:
                     nexthop_router = self.cache_logical_router_by_dpid["2"]
@@ -670,6 +668,18 @@ class SimpleRouter(app_manager.RyuApp):
                     nexthop_router = self.nb_api.get(l3.LogicalRouter(id="2"))
                 nh_port = nexthop_router.ports[1]
                 return rport.port_no, rport.mac, nh_port.mac
+            else:
+                # host mac adress
+                # Learned by ARP
+                # if self.USE_CACHE:
+                #     lport = self.cache_logical_port_by_port_id["{}:{}".format(dpid, 2)]
+                # else:
+                #     lport = self.nb_api.get(l2.LogicalPort(id="{}:{}".format(dpid, 2)))
+                # dst_mac = lport.macs[0]
+                # rport = lrouter.ports[1]  # second port
+                # return rport.port_no, rport.mac, dst_mac
+                return None, None, None
+
         else:
             print "Datapath {} not supported. Cannot return nexthop information!"
             return None, None, None
