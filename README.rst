@@ -1,3 +1,35 @@
+# FORK NOTES
+EXPERIMENTAL FORK
+
+Execution of test szenarios:
+- Test topologies in mininet/testbed*
+- Test controllers in dragonflow/tests/df_standalone
+
+Example:
+- Startup controller1: vagrant up controller1
+- Install requirements.txt and test-requirements.txt with pip.
+- Startup a Redis cluster (inside docker-redis-cluster folder): make run
+- Startup the switch (inside the mininet folder, mininet needs to be run
+as root): ./python-sudo testbed0/scratchnet_...ipv4.py
+- Startup the controller (starting l2_app_concept2.py): python2
+dragonflow/tests/df_standalone/test_run_standalone.py
+
+## Fixes
+- Fix for Redis to work with docker containers for testing:
+
+```python
+    177:            # FIX for work with docker redis cluster
+    178-            # cluster nodes returns docker container ip
+    179-            # This ip is not reachable from remote host
+    180-            # Replacing containter IP with host ip
+    181-            default_ip_port = self.redisMgt.keys()[0]
+    182-            _, port = ip_port.split(':')
+    183-            ip_default, _ = default_ip_port.split(':')
+    184-            ip_port = "{}:{}".format(ip_default, port)
+```
+
+
+
 ========================
 Team and repository tags
 ========================

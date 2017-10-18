@@ -24,6 +24,7 @@ CTLR_PRT = '6653'
 # 0: Step wise testing, 1: Continues Testing
 mode = 1
 
+datapath_id = ""
 
 def stop_net(controller, cname, switch):
     info("*** Stopping network\n")
@@ -55,7 +56,7 @@ def scratchNet(cname='controller', cargs='-v ptcp:'):
     info("*** Starting network using Open vSwitch\n")
     controller.cmd(cname + ' ' + cargs + '&')
     switch.cmd('ovs-vsctl del-br dp0')
-    switch.cmd('ovs-vsctl add-br dp0')
+    switch.cmd('ovs-vsctl add-br dp0 other-config:datapath-id={}'.format(datapath_id))
     for intf in switch.intfs.values():
         print switch.cmd('ovs-vsctl add-port dp0 %s' % intf)
 

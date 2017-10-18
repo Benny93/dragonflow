@@ -59,7 +59,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                                                        gateway_ip="192.168.123.1",
                                                        cidr="192.168.123.0/24",
                                                        id="fake_subnet1")]
-        print (self.fake_lswitch_default_subnets[0].dhcp_ip)
+        #print (self.fake_lswitch_default_subnets[0].dhcp_ip)
 
         #common_config.init(sys.argv[1:3])
         #common_config.setup_logging()
@@ -239,15 +239,15 @@ class SimpleSwitch13(app_manager.RyuApp):
         for switch in switch_list:
             self.create_switch(switch)
             for p in switch.ports:
-                print 'create port {}'.format(p)
+                #print 'create port {}'.format(p)
                 self.create_port(switch.dp.id,"", p.port_no, p.hw_addr)
 
-        print ("Switch ENTER Done")
+        print ("L2 App: Switch ENTER Done")
 
     @set_ev_cls(event.EventSwitchLeave)
     def on_switch_leave(self, ev):
-        print "Switch left"
         dpid = "{}".format(ev.switch.dp.id)
+        print "L2 App: Switch {} left".format(dpid)
         # Removing Switch from DB and Cache (optional)
         db_switch = self.nb_api.get(l2.LogicalSwitch(id=dpid))
         self.nb_api.delete(db_switch)

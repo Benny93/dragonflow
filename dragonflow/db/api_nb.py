@@ -179,7 +179,7 @@ class NbApi(object):
 
     def db_change_callback(self, table, key, action, value, topic=None):
         update = db_common.DbUpdate(table, key, action, value, topic=topic)
-        print "Pushing Update to Queue: {}".format(update)
+        #print "Pushing Update to Queue: {}".format(update)
         #self._queue.put(update)
         time.sleep(0)
         # TODO: This is a temporary fix until DF cache is ported to standalone version

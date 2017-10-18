@@ -243,7 +243,7 @@ class RedisDbDriver(db_api.DbApi):
                             res.append(self._execute_cmd("GET", tmp_key))
                 return res
             except Exception:
-                LOG.exception("exception when get_all_entries: %(key)s",
+                print "exception when get_all_entries: {}".format(
                               {'key': local_key})
 
         else:

@@ -522,13 +522,14 @@ class SimpleRouter(app_manager.RyuApp):
         :param ev:
         """
         switch_list = get_switch(self, None)  # .topology_api_app
-
+        dpids = []
         # TODO: Create only if not exisiting
         for switch in switch_list:
+            dpids.append(switch.dp.id)
             # self.create_switch(switch)
             self.create_logical_router(switch)
 
-        print ("l3 Switch ENTER Done")
+        print ("l3 Switch ENTER Done dpid-list:{}".format(dpids))
 
     @set_ev_cls(event.EventSwitchLeave)
     def on_switch_leave(self, ev):

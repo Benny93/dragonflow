@@ -36,11 +36,11 @@ LOG = logging.getLogger(__name__)
 # Jam here any extra log level default you care about. This helps keep
 # Neutron logs lean.
 EXTRA_LOG_LEVEL_DEFAULTS = [
-    'OFPHandler=DEBUG',
-    'OfctlService=DEBUG',
-    'ryu.base.app_manager=DEBUG',
-    'ryu.controller.controller=DEBUG',
-    'ovsdbapp.backend.ovs_idl.vlog=DEBUG'
+    'OFPHandler=INFO',
+    'OfctlService=INFO',
+    'ryu.base.app_manager=INFO',
+    'ryu.controller.controller=INFO',
+    'ovsdbapp.backend.ovs_idl.vlog=INFO'
 ]
 
 # Register the configuration options
