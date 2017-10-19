@@ -52,7 +52,11 @@ def main():
     # set controller load to 0
     override_load_file(0)
 
-    manager.main()
+    try:
+        manager.main()
+    except KeyboardInterrupt:
+        override_load_file(0)
+        print "Exiting because keyboard interrupt was received."
 
 
 if __name__ == "__main__":

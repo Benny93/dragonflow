@@ -124,13 +124,13 @@ def scratchNet(cname='controller', cargs='-v ptcp:'):
 
 
     net.build()
-    stime = 3
+    stime = 4
 
     s1.start([c0])
-    print "sleeping{}".format(stime)
+    print "Sleeping {} seconds before start of switch 2".format(stime)
     time.sleep(stime)
     s2.start([c0])
-    print "sleeping{}".format(stime)
+    print "Sleeping {} seconds before start of switch 3".format(stime)
     time.sleep(stime)
     s3.start([c0])
 

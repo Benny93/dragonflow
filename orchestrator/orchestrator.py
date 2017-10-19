@@ -48,7 +48,7 @@ def poll_ctl_load(session, hostname):
 def set_router_weights(ctls, session):
     ctl1_weight = ctls[CONTROLLER1_HOST_NAME]["weight"]
     ctl2_weight = ctls[CONTROLLER2_HOST_NAME]["weight"]
-    cmd_adjust_weight = "sudo ip -6 r c 2017:db8::ffaa " \
+    cmd_adjust_weight = "sudo ip -6 route replace 2017:db8::ffaa " \
                         "nexthop via 2017:db8::f201 dev enp0s9 weight {} " \
                         "nexthop via 2017:db8::f301 dev enp0s10 weight {}".format(ctl1_weight, ctl2_weight)
     print "Deploying command on router: {}".format(ROUTER_IP_IF)
@@ -82,7 +82,7 @@ if (ctl1_session or ctl2_session) and router_session:
                 if load_sum == 0:
                     weight = 1 / len(ctls)
                 else:
-                    weight = 1 - (ctls[key]["load"] / load_sum)
+                    weight = 1 - (float(ctls[key]["load"])/ load_sum)
                 ctls[key]["weight"] = int(min(max(100 * weight, 1), 99))
 
             # update weights of router
