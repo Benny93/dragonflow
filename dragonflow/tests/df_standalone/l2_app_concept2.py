@@ -18,6 +18,7 @@ from dragonflow.tests.df_standalone import controller_concept
 from dragonflow.neutron.common import config as common_config
 import sys
 from dragonflow.db.models import core
+from load_monitoring import override_load_file
 
 from oslo_log import log
 
@@ -236,6 +237,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         # print "links_list: ", links_list  # [0]
         # print "links", links
 
+        # update load monitoring
+        override_load_file(load=len(switch_list))
+
         for switch in switch_list:
             self.create_switch(switch)
             for p in switch.ports:
@@ -258,6 +262,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         # Remove switch and ports from cache if cacheing is enabled
         if self.USE_CACHE:
             self.cache_ports_by_datapath_id.pop(dpid, None)
+
+        switch_list = get_switch(self, None)
+        # update load monitoring
+        override_load_file(load=len(switch_list))
 
     # DATABASE and CACHE Access
 

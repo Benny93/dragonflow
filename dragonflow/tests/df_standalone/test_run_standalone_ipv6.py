@@ -5,6 +5,8 @@ import sys
 from dragonflow import conf as cfg
 from ryu.cmd import manager
 from dragonflow.neutron.common import config as common_config
+from load_monitoring import override_load_file
+
 
 def main():
     # if len(sys.argv) > 1:
@@ -22,8 +24,8 @@ def main():
     # except Exception:
     #     port = ""
 
-    #sys.argv.append('--config-file')
-    #sys.argv.append('/home/vagrant/dragonflow/etc/neutron.conf')
+    # sys.argv.append('--config-file')
+    # sys.argv.append('/home/vagrant/dragonflow/etc/neutron.conf')
     sys.argv.append('--config-file')
     sys.argv.append('../../../etc/dragonflow.ini')
     # sys.argv.append('ws_topology.py')
@@ -34,7 +36,6 @@ def main():
     sys.argv.append('--verbose')
     sys.argv.append('--observe-links')
 
-
     common_config.init(sys.argv[1:3])
     common_config.setup_logging()
 
@@ -43,11 +44,13 @@ def main():
     #     sys.argv.append('--ofp-tcp-listen-port')
     #     sys.argv.append(port)
 
-
     # ipv6 listen host
     sys.argv.append('--ofp-listen-host')
     sys.argv.append('::')
     # sys.argv.append('--enable-debugger')
+
+    # set controller load to 0
+    override_load_file(0)
 
     manager.main()
 
