@@ -2,6 +2,14 @@
 
 import sys
 
+# FIX for starting this module
+try:
+    import dragonflow
+except:
+    sys.path.append('/home/ubuntu/sf_SDN/dragonflow');
+    sys.path.append('/media/sf_SDN/dragonflow/dragonflow/tests/df_standalone');
+    print "DF was not found, upadeted Path to: {}".format(sys.path)
+
 from dragonflow import conf as cfg
 from ryu.cmd import manager
 from dragonflow.neutron.common import config as common_config
